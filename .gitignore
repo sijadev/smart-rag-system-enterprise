@@ -1,0 +1,207 @@
+# Smart RAG System .gitignore
+
+# Environment and Configuration Files
+.env
+.env.*
+.env.local
+.env.development
+.env.production
+.env.enterprise
+config.ini
+config.yaml
+secrets.yml
+
+# API Keys and Credentials
+*.key
+*.pem
+*.crt
+*.p12
+credentials/
+secrets/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+pipenv/
+Pipfile.lock
+
+# IDE Files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+*.sublime-workspace
+*.sublime-project
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+*.ipynb
+
+# Data Files
+data/
+*.db
+*.sqlite
+*.sqlite3
+learning_data/
+embeddings/
+processed_data/
+temp_data/
+uploads/
+downloads/
+
+# Logs
+logs/
+*.log
+*.log.*
+log_*.txt
+
+# Neo4j
+neo4j/
+*.neo4j
+graph.db/
+neo4j.conf
+
+# ChromaDB / Vector Databases
+chroma_db/
+*.chroma
+vectordb/
+faiss_index/
+*.index
+
+# Machine Learning Models
+models/
+*.pkl
+*.joblib
+*.h5
+*.hdf5
+*.pb
+*.onnx
+*.pt
+*.pth
+checkpoints/
+
+# Temporary Files
+tmp/
+temp/
+*.tmp
+*.temp
+.cache/
+cache/
+
+# OS Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Streamlit
+.streamlit/
+
+# Pytest
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# MyPy
+.mypy_cache/
+.dmypy.json
+dmyp.json
+
+# Documentation
+docs/_build/
+site/
+
+# Backup Files
+*.bak
+*.backup
+*.old
+
+# Archives
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# Large Files (Git LFS candidates)
+*.pdf
+*.docx
+*.xlsx
+*.pptx
+*.mp4
+*.avi
+*.mov
+*.wav
+*.mp3
+
+# Package Files
+node_modules/
+package-lock.json
+yarn.lock
+
+# Docker
+Dockerfile.dev
+docker-compose.override.yml
+.dockerignore
+
+# Kubernetes
+*.yaml.local
+*.yml.local
+
+# Monitoring and Analytics
+prometheus/
+grafana/
+monitoring/
+
+# Testing
+coverage/
+.coverage.*
+coverage.xml
+*.cover
+.hypothesis/
+
+# Local Development
+local_*
+dev_*
+test_*
+debug_*
+
+# Enterprise specific
+enterprise/
+production/
+staging/
