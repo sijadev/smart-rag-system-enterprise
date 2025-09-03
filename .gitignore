@@ -205,3 +205,21 @@ debug_*
 enterprise/
 production/
 staging/
+
+# Ignore downloaded PlantUML jar
+plantuml.jar
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Virtual env
+.env
+.venv
+venv/
+
+# JetBrains
+.idea/
