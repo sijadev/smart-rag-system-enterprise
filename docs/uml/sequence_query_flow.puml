@@ -1,0 +1,52 @@
+@startuml
+title Anfragefluss: SmartRAGSystem.query -> Retrieval
+
+actor User
+participant SmartRAGSystem as System
+participant DIContainer as DI
+participant "RetrievalStrategy (Hybrid/Vector)" as Strategy
+participant VectorStore as Vector
+participant GraphStore as Graph
+participant LLMService as LLM
+participant EventManager as Events
+
+User -> System: query(query, strategy)
+activate System
+System -> DI: resolve(RetrievalStrategy)
+activate DI
+DI --> System: strategy_instance
+deactivate DI
+
+System -> Strategy: retrieve(query, context, k)
+activate Strategy
+alt Strategy benötigt LLM (GraphOnly / Semantic)
+    Strategy -> LLM: generate(prompt, context)
+    activate LLM
+    LLM --> Strategy: text
+    deactivate LLM
+end
+par
+    Strategy -> Vector: search_similar(query, k)
+    activate Vector
+    Vector --> Strategy: vector_results
+    deactivate Vector
+
+    Strategy -> Graph: query_graph(query, params)
+    activate Graph
+    Graph --> Strategy: graph_results
+    deactivate Graph
+end
+
+Strategy -> Strategy: combine_results(vector_results, graph_results)
+Strategy --> System: RetrievalResult
+deactivate Strategy
+
+System -> Events: notify('query_completed', payload)
+activate Events
+Events --> System: ack
+deactivate Events
+System --> User: Response
+deactivate System
+
+@enduml
+

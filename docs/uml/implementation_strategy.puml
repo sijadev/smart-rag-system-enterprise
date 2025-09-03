@@ -1,0 +1,90 @@
+@startuml
+' Implementation strategy: mapping Interfaces -> Implementations and runtime wiring
+
+package "interfaces" {
+  interface ILLMService
+  interface IVectorStore
+  interface IGraphStore
+  interface IRetrievalStrategy
+  interface IQueryProcessor
+  interface IObserver
+  interface IMetricsCollector
+  interface ILearningSystem
+}
+
+package "config" {
+  class RAGSystemConfig
+  class RAGSystemBuilder
+}
+
+package "factories" {
+  class LLMServiceFactory
+  class DatabaseFactory
+  class RetrievalStrategyFactory
+}
+
+package "core" {
+  class DIContainer
+  class SmartRAGSystem
+}
+
+package "impl/mocks" {
+  class MockLLMService
+  class MockVectorStore
+  class MockGraphStore
+}
+
+package "impl/strategies" {
+  class VectorOnlyStrategy
+  class GraphOnlyStrategy
+  class HybridStrategy
+  class SemanticSearchStrategy
+}
+
+package "processing" {
+  class QueryProcessorChain
+  class FactualQueryProcessor
+  class AnalyticalQueryProcessor
+  class FallbackQueryProcessor
+}
+
+package "monitoring" {
+  class EventManager
+  class PerformanceMonitor
+  class MetricsCollector
+}
+
+' relationships
+ILLMService <|.. MockLLMService
+IVectorStore <|.. MockVectorStore
+IGraphStore <|.. MockGraphStore
+IRetrievalStrategy <|.. VectorOnlyStrategy
+IRetrievalStrategy <|.. GraphOnlyStrategy
+IRetrievalStrategy <|.. HybridStrategy
+IRetrievalStrategy <|.. SemanticSearchStrategy
+IQueryProcessor <|.. FactualQueryProcessor
+IQueryProcessor <|.. AnalyticalQueryProcessor
+IQueryProcessor <|.. FallbackQueryProcessor
+IObserver <|.. PerformanceMonitor
+IMetricsCollector <|.. MetricsCollector
+
+RAGSystemBuilder --> RAGSystemConfig
+LLMServiceFactory --> ILLMService
+DatabaseFactory --> IVectorStore
+DatabaseFactory --> IGraphStore
+RetrievalStrategyFactory --> IRetrievalStrategy
+
+SmartRAGSystem --> DIContainer
+SmartRAGSystem --> RAGSystemConfig
+SmartRAGSystem --> RetrievalStrategyFactory
+SmartRAGSystem --> EventManager
+
+DIContainer --> LLMServiceFactory
+DIContainer --> DatabaseFactory
+DIContainer --> RetrievalStrategyFactory
+
+QueryProcessorChain --> IRetrievalStrategy
+QueryProcessorChain --> IQueryProcessor
+
+@enduml
+
