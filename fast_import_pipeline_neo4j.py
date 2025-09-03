@@ -3,16 +3,19 @@ Enhanced Fast Import Pipeline with Neo4j Support
 Addresses connection generation issues and stores data in Neo4j
 """
 
-import os
 import logging
+import os
 from typing import List, Dict, Tuple, Optional
 from dataclasses import dataclass
 import numpy as np
 from pathlib import Path
-from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
+# Import central config instead of loading .env directly
+try:
+    from src.central_config import CentralConfig, get_config
+except ImportError:
+    # Fallback if src structure not available
+    from central_config import CentralConfig, get_config
 
 # Import required libraries
 try:
@@ -50,7 +53,8 @@ class FastImportPipelineNeo4j:
                  max_connections_per_chunk: int = 5,
                  neo4j_uri: str = None,
                  neo4j_user: str = None,
-                 neo4j_password: str = None):
+                 neo4j_password: str = None,
+                 config: CentralConfig = None):
         """
         Initialize the import pipeline
 
@@ -59,24 +63,23 @@ class FastImportPipelineNeo4j:
             chunk_overlap: Overlap between chunks
             similarity_threshold: Minimum similarity for connections
             max_connections_per_chunk: Maximum connections per chunk
-            neo4j_uri: Neo4j database URI (uses ENV variable if None)
-            neo4j_user: Neo4j username (uses ENV variable if None)
-            neo4j_password: Neo4j password (uses ENV variable if None)
+            neo4j_uri: Neo4j database URI (uses central config if None)
+            neo4j_user: Neo4j username (uses central config if None)
+            neo4j_password: Neo4j password (uses central config if None)
+            config: Central configuration instance (loads automatically if None)
         """
+        # Load central configuration
+        self.config = config or get_config()
+
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
         self.similarity_threshold = similarity_threshold
         self.max_connections_per_chunk = max_connections_per_chunk
 
-        # Neo4j configuration - use environment variables as default
-        self.neo4j_uri = neo4j_uri or os.getenv('NEO4J_URI', 'bolt://localhost:7687')
-        self.neo4j_user = neo4j_user or os.getenv('NEO4J_USER', 'neo4j')
-        self.neo4j_password = neo4j_password or os.getenv('NEO4J_PASSWORD', 'neo4j123')
-
-        # FORCE CORRECTION: If the wrong password is loaded, override it
-        if self.neo4j_password == 'neo4jtest':
-            self.neo4j_password = 'neo4j123'
-            self.logger.warning("⚠️ Corrected wrong password 'neo4jtest' to 'neo4j123'")
+        # Use central config for Neo4j configuration
+        self.neo4j_uri = neo4j_uri or self.config.database.neo4j_uri
+        self.neo4j_user = neo4j_user or self.config.database.neo4j_user
+        self.neo4j_password = neo4j_password or self.config.database.neo4j_password
 
         # Initialize components
         self.embedding_model = None
@@ -89,9 +92,9 @@ class FastImportPipelineNeo4j:
         logging.basicConfig(level=logging.INFO)
         self.logger = logging.getLogger(__name__)
 
-        # Log the configuration being used
-        self.logger.info(f"Neo4j Configuration: URI={self.neo4j_uri}, User={self.neo4j_user}, Password={'*' * len(self.neo4j_password)}")
-        self.logger.info(f"ACTUAL PASSWORD BEING USED: {self.neo4j_password}")
+        # Log the configuration being used (without exposing password)
+        self.logger.info(f"Neo4j Configuration: URI={self.neo4j_uri}, User={self.neo4j_user}")
+        self.logger.info(f"Using Neo4j password from environment: {'✅ Found' if os.getenv('NEO4J_PASSWORD') else '⚠️ Using fallback'}")
 
     def initialize_components(self):
         """Initialize embedding model, vector database, and Neo4j"""

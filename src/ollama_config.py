@@ -43,6 +43,23 @@ class OllamaSystemConfig:
     use_local_embeddings: bool = True
 
     def __post_init__(self):
+        # Lade Werte aus .env-Datei
+        self.base_url = os.getenv("OLLAMA_BASE_URL", self.base_url)
+        self.default_model = os.getenv("LLM_MODEL", self.default_model)
+        self.default_embedding_model = os.getenv("EMBED_MODEL", self.default_embedding_model)
+        self.chat_model = os.getenv("ANALYZER_MODEL", self.chat_model)
+
+        # Numerische Werte sicher parsen
+        try:
+            self.timeout = int(os.getenv("OLLAMA_TIMEOUT", str(self.timeout)))
+        except ValueError:
+            pass
+
+        try:
+            self.max_retries = int(os.getenv("OLLAMA_MAX_RETRIES", str(self.max_retries)))
+        except ValueError:
+            pass
+
         if self.recommended_models is None:
             self.recommended_models = [
                 "llama3.2:latest",  # Aktualisiert von llama2

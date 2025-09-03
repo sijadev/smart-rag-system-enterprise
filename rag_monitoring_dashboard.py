@@ -8,14 +8,18 @@ import numpy as np
 import sys
 import os
 from pathlib import Path
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
 
 # Add project root to Python path
-project_root = Path(__file__).parent  # Changed from .parent.parent to .parent
+project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
+
+# Import central config instead of loading .env directly
+try:
+    from src.central_config import CentralConfig, get_config
+    CONFIG_AVAILABLE = True
+except ImportError as e:
+    st.error(f"Central config not found: {e}")
+    CONFIG_AVAILABLE = False
 
 # Import from our actual pipeline
 try:
@@ -31,6 +35,9 @@ class RAGMonitoringDashboard:
 
     def __init__(self):
         self.pipeline = None
+        self.config = None
+        if CONFIG_AVAILABLE:
+            self.config = get_config()
         self.setup_dashboard()
 
     def setup_dashboard(self):
@@ -57,13 +64,15 @@ class RAGMonitoringDashboard:
         st.info("✅ Pipeline-Test erfolgreich: 1062 Chunks, 4124 Verbindungen erstellt!")
         st.success("🎉 Das 'null Verbindungen' Problem ist gelöst!")
 
-        # Neo4j Status Check
-        if os.path.exists('.env'):
-            neo4j_password = os.getenv('NEO4J_PASSWORD', 'neo4j123')
+        # Neo4j Status Check using central config
+        if self.config and CONFIG_AVAILABLE:
+            neo4j_password = self.config.database.neo4j_password
             if neo4j_password == 'neo4j123':
-                st.success("✅ Korrektes Neo4j-Passwort in .env gefunden: neo4j123")
+                st.success("✅ Korrektes Neo4j-Passwort in zentraler Config gefunden: neo4j123")
             else:
-                st.warning(f"⚠️ Neo4j-Passwort in .env: {neo4j_password}")
+                st.warning(f"⚠️ Neo4j-Passwort in zentraler Config: {neo4j_password}")
+        else:
+            st.warning("⚠️ Zentrale Konfiguration nicht verfügbar")
 
         # Show immediate working solution
         st.info("💡 **Sofortige Lösung verfügbar**: ChromaDB funktioniert garantiert und erstellt über 4000 Verbindungen!")
@@ -87,44 +96,28 @@ class RAGMonitoringDashboard:
             if "Neo4j" in database_type:
                 st.subheader("🔧 Neo4j Konfiguration")
 
-                # Load from .env file or use defaults
-                default_uri = os.getenv('NEO4J_URI', 'bolt://localhost:7687')
-                default_user = os.getenv('NEO4J_USER', 'neo4j')
-                env_password = os.getenv('NEO4J_PASSWORD')
-
-                # Debug information to help identify password source issues
-                if env_password:
-                    if env_password == 'neo4j123':
-                        st.success(f"✅ Korrektes Neo4j-Passwort geladen: {env_password}")
-                        default_password = env_password
-                    elif env_password == 'neo4jtest':
-                        st.error("❌ PROBLEM: Falsche Umgebungsvariable NEO4J_PASSWORD=neo4jtest erkannt!")
-                        st.error("🔧 Lösung: Führen Sie 'unset NEO4J_PASSWORD' im Terminal aus")
-                        default_password = 'neo4j123'  # Force correct password
-                    else:
-                        st.info(f"📋 Neo4j-Passwort aus Umgebung: {env_password}")
-                        default_password = env_password
+                # Use central config values as defaults
+                if self.config and CONFIG_AVAILABLE:
+                    default_uri = self.config.database.neo4j_uri
+                    default_user = self.config.database.neo4j_user
+                    default_password = self.config.database.neo4j_password
+                    st.success("✅ Verwendet zentrale Konfiguration aus .env")
                 else:
-                    # Fallback to default if no environment variable
+                    # Fallback values if central config not available
+                    default_uri = 'bolt://localhost:7687'
+                    default_user = 'neo4j'
                     default_password = 'neo4j123'
-                    st.info("💡 Kein NEO4J_PASSWORD in Umgebung gefunden, verwende Standard: neo4j123")
+                    st.warning("⚠️ Verwendet Fallback-Werte (zentrale Config nicht verfügbar)")
 
                 neo4j_uri = st.text_input("Neo4j URI", value=default_uri)
                 neo4j_user = st.text_input("Neo4j Benutzer", value=default_user)
                 neo4j_password = st.text_input("Neo4j Passwort", value=default_password, type="password")
 
-                # Show .env status with comprehensive diagnostics
-                if os.path.exists('.env'):
-                    with open('.env', 'r') as f:
-                        env_content = f.read()
-                        if 'NEO4J_PASSWORD=neo4j123' in env_content:
-                            st.success("✅ .env-Datei enthält korrektes Passwort: neo4j123")
-                        elif 'NEO4J_PASSWORD=neo4jtest' in env_content:
-                            st.warning("⚠️ .env-Datei enthält falsches Passwort: neo4jtest")
-                        else:
-                            st.info("📋 .env-Datei gefunden, Neo4j-Passwort wird analysiert...")
+                # Show central config status
+                if self.config and CONFIG_AVAILABLE:
+                    st.info("📋 Zentrale Konfiguration erfolgreich geladen aus .env-Datei")
                 else:
-                    st.warning("⚠️ .env-Datei nicht gefunden - erstellen Sie eine für konsistente Konfiguration")
+                    st.error("❌ Zentrale Konfiguration nicht verfügbar - verwende Fallback-Werte")
 
             # Konfigurierbare Parameter - mit bewährten Werten
             st.subheader("🔧 Pipeline Parameter")

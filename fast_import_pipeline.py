@@ -3,12 +3,19 @@ Enhanced Fast Import Pipeline for RAG System
 Addresses connection generation issues during PDF import
 """
 
-import os
 import logging
+import os
 from typing import List, Dict, Tuple, Optional
 from dataclasses import dataclass
 import numpy as np
 from pathlib import Path
+
+# Import central config instead of direct OS access
+try:
+    from src.central_config import CentralConfig, get_config
+except ImportError:
+    # Fallback if src structure not available
+    from central_config import CentralConfig, get_config
 
 # Import required libraries
 try:

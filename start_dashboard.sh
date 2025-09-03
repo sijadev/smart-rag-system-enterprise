@@ -9,7 +9,11 @@ echo "🚀 Starting Smart RAG Dashboard on port $PORT..."
 
 cd /Users/simonjanke/PycharmProjects/smart_rag_system/
 
-
+# Lade .env-Datei explizit (falls nicht automatisch geladen)
+if [ -f ".env" ]; then
+    export $(cat .env | grep -v '^#' | xargs)
+    echo "✅ .env-Datei geladen"
+fi
 
 # Starte Streamlit Dashboard
 streamlit run rag_monitoring_dashboard.py \
