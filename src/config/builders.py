@@ -107,6 +107,25 @@ class RAGSystemBuilder:
         """Konfiguriert Anthropic LLM"""
         return self.with_llm_provider(LLMProvider.ANTHROPIC, model_name, api_key=api_key)
 
+    # Neue LLM Helper: Temperatur setzen
+    def with_temperature(self, temperature: float) -> 'RAGSystemBuilder':
+        """Setzt die Default-Temperature für das LLM (0.0 - 1.0).
+
+        Fügt eine Validierungsregel hinzu, damit ungültige Werte beim Aufruf von build() einen Fehler auslösen.
+        """
+        self.config.temperature = temperature
+
+        # Validation: temperature within [0.0, 1.0]
+        def _temp_rule(cfg: RAGSystemConfig) -> bool:
+            try:
+                return 0.0 <= float(cfg.temperature) <= 1.0
+            except Exception:
+                return False
+
+        # Füge die Regel hinzu (mehrfache Hinzufügungen sind unkritisch)
+        self.add_validation_rule(_temp_rule)
+        return self
+
     # Retrieval Configuration
     def with_retrieval_strategy(self, strategy: RetrievalStrategy) -> 'RAGSystemBuilder':
         """Setzt Standard-Retrieval-Strategie"""
@@ -124,6 +143,20 @@ class RAGSystemBuilder:
     def with_graph_only_retrieval(self) -> 'RAGSystemBuilder':
         """Konfiguriert Graph-Only Retrieval"""
         return self.with_retrieval_strategy(RetrievalStrategy.GRAPH_ONLY)
+
+    # Neuer Helper: retrieval_k setzen
+    def with_retrieval_k(self, k: int) -> 'RAGSystemBuilder':
+        """Setzt die Anzahl der Retrieval-Ergebnisse (k)."""
+        self.config.retrieval_k = int(k)
+
+        def _k_rule(cfg: RAGSystemConfig) -> bool:
+            try:
+                return isinstance(cfg.retrieval_k, int) and cfg.retrieval_k > 0
+            except Exception:
+                return False
+
+        self.add_validation_rule(_k_rule)
+        return self
 
     # Database Configuration
     def with_vector_store(self, store_type: str = "chroma", path: str = "./data/vectors") -> 'RAGSystemBuilder':

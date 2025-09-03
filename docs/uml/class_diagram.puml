@@ -1,0 +1,124 @@
+@startuml
+' Class diagram for Smart RAG System (extracted from codebase and tests)
+
+package "config" {
+  class RAGSystemConfig {
+    +system_name: str
+    +version: str
+    +llm_provider: LLMProvider
+    +model_name: str
+    +temperature: float
+    +retrieval_k: int
+    +enable_monitoring: bool
+    +enable_learning: bool
+  }
+
+  class RAGSystemBuilder {
+    +with_name(name: str): RAGSystemBuilder
+    +with_ollama(model_name: str): RAGSystemBuilder
+    +with_temperature(temperature: float): RAGSystemBuilder
+    +with_retrieval_k(k: int): RAGSystemBuilder
+    +without_graph_store(): RAGSystemBuilder
+    +with_monitoring(enabled: bool): RAGSystemBuilder
+    +with_learning(enabled: bool): RAGSystemBuilder
+    +build(): RAGSystemConfig
+  }
+}
+
+package "strategies" {
+  abstract class BaseRetrievalStrategy {
+    +retrieve(query: str, context: QueryContext, k: int): RetrievalResult
+    +_preprocess_query(query: str, context: QueryContext): str
+    +_do_retrieve(query: str, context: QueryContext, k: int): RetrievalResult
+    +_postprocess_result(result: RetrievalResult, query: str, context: QueryContext): RetrievalResult
+    +get_stats(): dict
+  }
+
+  class VectorOnlyStrategy {
+    +_do_retrieve(query: str, context: QueryContext, k: int): RetrievalResult
+  }
+
+  class GraphOnlyStrategy {
+    +_preprocess_query(query: str, context: QueryContext): str
+    +_do_retrieve(query: str, context: QueryContext, k: int): RetrievalResult
+  }
+
+  class HybridStrategy {
+    +_do_retrieve(query: str, context: QueryContext, k: int): RetrievalResult
+    +vector_weight: float
+    +graph_weight: float
+  }
+
+  class SemanticSearchStrategy {
+    +_preprocess_query(query: str, context: QueryContext): str
+    +_do_retrieve(query: str, context: QueryContext, k: int): RetrievalResult
+  }
+
+  BaseRetrievalStrategy <|-- VectorOnlyStrategy
+  BaseRetrievalStrategy <|-- GraphOnlyStrategy
+  BaseRetrievalStrategy <|-- HybridStrategy
+  BaseRetrievalStrategy <|-- SemanticSearchStrategy
+}
+
+package "processing" {
+  class QueryProcessorChain {
+    +add_processor(processor): void
+    +process_query(query: str, context: QueryContext): Response
+  }
+
+  class FactualQueryProcessor {
+    +process(query: str, context: QueryContext): Response
+  }
+
+  class AnalyticalQueryProcessor {
+    +process(query: str, context: QueryContext): Response
+  }
+
+  class FallbackQueryProcessor {
+    +process(query: str, context: QueryContext): Response
+  }
+
+  QueryProcessorChain --> FactualQueryProcessor
+  QueryProcessorChain --> AnalyticalQueryProcessor
+  QueryProcessorChain --> FallbackQueryProcessor
+}
+
+package "monitoring" {
+  class EventManager {
+    +subscribe(event: str, observer): void
+    +notify(event: str, payload: dict): awaitable
+    +get_event_history(limit: int): list
+  }
+
+  class PerformanceMonitor {
+    +get_metrics(): dict
+    +update(event_payload: dict): void
+  }
+
+  class MetricsCollector {
+    +collect(event_payload: dict): void
+  }
+
+  EventManager --> PerformanceMonitor
+  EventManager --> MetricsCollector
+}
+
+class DIContainer {
+  +register_singleton(type, factory): void
+  +register_transient(type, factory): void
+  +register_instance(type, instance): void
+  +resolve(type): object
+  +create_scope(name: str): contextmanager
+}
+
+class SmartRAGSystem {
+  +initialize(): None
+  +query(query: str, strategy: RetrievalStrategy = None): Response
+}
+
+SmartRAGSystem --> DIContainer
+SmartRAGSystem --> RAGSystemConfig
+SmartRAGSystem --> BaseRetrievalStrategy
+
+@enduml
+
