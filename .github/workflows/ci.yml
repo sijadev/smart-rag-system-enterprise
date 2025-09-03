@@ -23,15 +23,19 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then
-            pip install -r requirements.txt
-          else
-            pip install pytest
-          fi
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          python -m pip install pytest neo4j
+
+      - name: Collect tests (debug)
+        run: |
+          echo "Listing top-level files:" && ls -la
+          echo "Finding test files:" && find . -maxdepth 5 -type f -name 'test_*.py' -print || true
+          echo "Running pytest --collect-only (verbose) in ./tests"
+          python -m pytest --collect-only -q -vv ./tests || true
 
       - name: Run tests
         run: |
-          python -m pytest -q
+          python -m pytest -q ./tests
 
       - name: Upload pytest logs
         if: always()
