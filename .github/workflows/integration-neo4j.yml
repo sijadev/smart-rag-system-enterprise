@@ -17,14 +17,12 @@ jobs:
           - 7687:7687
         env:
           NEO4J_AUTH: "neo4j/${{ secrets.NEO4J_PASSWORD }}"
-        options: >-
-          --health-cmd="curl -sS http://localhost:7474 || exit 1"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=20
+        # Entferne container-internen Health-Check (curl häufig nicht verfügbar im Image)
+        # Runner wartet später aktiv per curl auf den HTTP-Port
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v4
