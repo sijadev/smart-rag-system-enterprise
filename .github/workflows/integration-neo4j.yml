@@ -53,4 +53,4 @@ jobs:
           NEO4J_USER: neo4j
           NEO4J_PASSWORD: ${{ secrets.NEO4J_PASSWORD }}
         run: |
-          python -m pytest -q tests/test_adapters_integration.py -q
+          python -m pytest -q
