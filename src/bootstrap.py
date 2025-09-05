@@ -133,7 +133,8 @@ def register_all_defaults():
                 config["embedder"] = embedder_callable
                 config["dimension"] = embedding_dim
 
-            for name in ("chroma", "faiss", "mock"):
+            # Prioritize qdrant as configured default; include common adapters and mock as last resort
+            for name in ("qdrant", "chroma", "faiss", "mock"):
                 try:
                     vs = DatabaseFactory.create_vector_store(name, config)
                     # register teardown to close if available

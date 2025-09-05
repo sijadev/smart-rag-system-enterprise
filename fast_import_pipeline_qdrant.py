@@ -509,7 +509,9 @@ class FastImportPipeline(IVectorStore):
                 self.vector_db.search_similar(query_embedding, k=top_k)
             )
 
-            return {"documents": [[r.get('content') for r in results]], "metadatas": [[r.get('metadata') for r in results]], "distances": [[1.0 - r.get('score', 0.0) for r in results]]}
+            return {"documents": [[r.get('content') for r in results]],
+                    "metadatas": [[r.get('metadata') for r in results]],
+                    "distances": [[1.0 - r.get('score', 0.0) for r in results]]}
 
         except Exception as e:
             # Log and return empty list on failure
@@ -518,4 +520,3 @@ class FastImportPipeline(IVectorStore):
             except Exception:
                 pass
             return []
-

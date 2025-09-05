@@ -57,7 +57,7 @@ services:
     container_name: smart_rag_qdrant
     restart: unless-stopped
     ports:
-      - "${QDRANT_HOST_PORT:-6333}:6333"    # Host port kann via QDRANT_HOST_PORT überschrieben werden
+      - "6333:6333"    # Fixed host port mapping to ensure stable endpoint
     environment:
       # konservative defaults; Pfad wird durch Volume gemounted
       - QDRANT__SERVICE__HTTP_PORT=6333

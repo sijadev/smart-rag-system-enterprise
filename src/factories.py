@@ -63,8 +63,10 @@ class DatabaseFactory:
             try:
                 from .adapters.mock_vector_store import MockVectorStore
 
+                # register only the canonical 'mock' name; do NOT override the
+                # requested name (e.g. 'qdrant') so that callers can detect
+                # the missing adapter and handle fallback explicitly.
                 cls.register_vector_store("mock", MockVectorStore)
-                cls.register_vector_store(name, MockVectorStore)
                 return MockVectorStore(config or {})
             except Exception:
                 raise KeyError(f"No vector store registered for {name}")

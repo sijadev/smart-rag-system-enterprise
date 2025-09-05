@@ -134,9 +134,10 @@ class FaissAdapter(IVectorStore):
             norms = np.linalg.norm(v, axis=1, keepdims=True)
             norms[norms == 0] = 1.0
             v = v / norms
-            D, I = self._index.search(v, min(k, len(self._vectors)))
+            # rename ambiguous 'I' to 'idxs' to avoid E741
+            D, idxs = self._index.search(v, min(k, len(self._vectors)))
             results = []
-            for score, idx in zip(D[0].tolist(), I[0].tolist()):
+            for score, idx in zip(D[0].tolist(), idxs[0].tolist()):
                 if idx < 0 or idx >= len(self._ids):
                     continue
                 meta = self._metadatas[idx]

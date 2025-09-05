@@ -4,16 +4,16 @@ import io
 import json
 import logging
 import os
-import socket
 import time
 from contextlib import asynccontextmanager
 from typing import List, Optional
 
-import requests
 from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+import pathlib
 
 from fast_import_pipeline_qdrant import FastImportPipeline
 from src.adapters.neo4j_adapter import Neo4jAdapter
@@ -99,6 +99,42 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Smart RAG - Ollama UI", lifespan=lifespan)
 
+# Resolve module directory and use absolute paths for templates/static so uvicorn cwd doesn't matter
+BASE_DIR = str(pathlib.Path(__file__).resolve().parent)
+TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
+STATIC_DIR = os.path.join(BASE_DIR, "static")
+
+# Register templates and serve static assets (css/js) expected by the chat UI
+templates = Jinja2Templates(directory=TEMPLATES_DIR)
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+
+# Root-Route: rendere die Chat-Webseite (templates/chat.html). Falls das Template fehlt,
+# fällt die Route auf eine einfache HTML-Fallbackseite zurück.
+@app.get("/", include_in_schema=False)
+async def root_index(request: Request):
+    try:
+        # templates ist bereits mit Jinja2Templates(directory="src/web/templates") definiert
+        return templates.TemplateResponse("chat.html", {"request": request})
+    except Exception:
+        html = """
+        <!doctype html>
+        <html>
+          <head><meta charset="utf-8"><title>Smart RAG</title></head>
+          <body>
+            <h1>Smart RAG</h1>
+            <p>API-Status und Tools:</p>
+            <ul>
+              <li><a href="/status/qdrant">Qdrant Status (JSON)</a></li>
+              <li><a href="/status/qdrant/points">Qdrant Points (Debug)</a></li>
+              <li><a href="/docs">OpenAPI Docs</a></li>
+            </ul>
+            <p>Zum Hochladen: <code>/import</code> (POST)</p>
+          </body>
+        </html>
+        """
+        return HTMLResponse(content=html, status_code=200)
+
 # CORS für die Entwicklung: erlaubt Zugriffe von anderen Hosts/Ports (z. B. Frontend dev server)
 app.add_middleware(
     CORSMiddleware,
@@ -107,8 +143,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-templates = Jinja2Templates(directory="src/web/templates")
 
 
 # Fortschritts-Status für Import (einfach, global) — sicherstellen, dass diese Variable vorhanden ist
@@ -352,12 +386,29 @@ ACTIVE_CONFIG = {
 
 
 def get_vector_stores():
-    # Return only vector-oriented stores (Qdrant, Faiss, mock vector stores, ...)
+    # Prefer the DI-registered IVectorStore so configuration/bootstrapping
+    # determines the concrete adapter (qdrant) instead of instantiating a
+    # fresh QdrantAdapter which may bypass DI and mocks.
     stores = []
-    for db in ACTIVE_CONFIG.get("databases", []):
-        if db == "qdrant":
-            stores.append(("qdrant", QdrantAdapter()))
-        # add other vector store adapters here if present, e.g. 'faiss'
+    try:
+        from src.di_container import resolve
+        from src.interfaces import IVectorStore
+        try:
+            vs = resolve(IVectorStore)
+            if vs is not None:
+                stores.append(("qdrant", vs))
+                return stores
+        except Exception:
+            # fallthrough to direct instantiation
+            pass
+    except Exception:
+        pass
+
+    # Fallback: instantiate adapter directly (best-effort)
+    try:
+        stores.append(("qdrant", QdrantAdapter()))
+    except Exception:
+        pass
     return stores
 
 
@@ -578,14 +629,35 @@ async def status_neo4j():
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
 
 
+# Backwards-compatible endpoint used by the UI frontend
+@app.get("/api/status")
+async def api_status():
+    """Compatibility wrapper for the frontend: returns {neo4j, qdrant, llm} booleans."""
+    try:
+        state = await _probe_services()
+        return JSONResponse(state)
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
 @app.get("/status/qdrant")
 async def status_qdrant():
     try:
         qdrant_adapter = resolve(IVectorStore)
-        status = await qdrant_adapter.health_check()
-        return JSONResponse(status)
+        adapter_type = type(qdrant_adapter).__module__ + "." + type(qdrant_adapter).__name__
+        # Prefer calling health_check if available, else provide info
+        if hasattr(qdrant_adapter, "health_check"):
+            status = await qdrant_adapter.health_check()
+            # include adapter type for debugging
+            if isinstance(status, dict):
+                status["adapter"] = adapter_type
+            else:
+                status = {"ok": True, "adapter": adapter_type}
+            return JSONResponse(status)
+        else:
+            return JSONResponse({"ok": False, "error": "adapter has no health_check", "adapter": adapter_type})
     except Exception as e:
-        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+        return JSONResponse({"ok": False, "error": str(e)})
 
 
 @app.get("/monitoring/pipeline")
@@ -622,80 +694,19 @@ async def monitoring_llm():
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
 
 
-# --- Service health helpers (used by /api/status and /api/status/stream) ---
-def _check_tcp(host: str, port: int, timeout: float = 1.0) -> bool:
-    try:
-        with socket.create_connection((host, port), timeout=timeout):
-            return True
-    except Exception:
-        return False
-
-
-def _check_http(url: str, timeout: float = 1.5) -> bool:
-    try:
-        r = requests.get(url, timeout=timeout)
-        return 200 <= r.status_code < 400
-    except Exception:
-        return False
-
-
-def _parse_host_port(uri: str):
-    if not uri:
-        return None, None
-    if '://' in uri:
-        uri = uri.split('://', 1)[1]
-    if '/' in uri:
-        uri = uri.split('/', 1)[0]
-    if ':' in uri:
-        host, port = uri.split(':', 1)
-        try:
-            return host, int(port)
-        except Exception:
-            return host, None
-    return uri, None
-
-
-async def _probe_services():
-    """Run all checks in threadpool and return a dict with booleans."""
-    # read configuration from existing ACTIVE_CONFIG or env fallbacks
-    neo4j_uri = os.environ.get('NEO4J_URI') or 'bolt://localhost:7687'
-    qdrant_url = os.environ.get('QDRANT_URL') or 'http://localhost:6333'
-    llm_url = os.environ.get('LLM_URL') or 'http://localhost:11434'
-
-    async def _neo_check():
-        if neo4j_uri.startswith('bolt') or neo4j_uri.startswith('neo4j'):
-            host, port = _parse_host_port(neo4j_uri)
-            if port is None:
-                port = 7687
-            return await asyncio.to_thread(_check_tcp, host, port, 1.0)
-        return await asyncio.to_thread(_check_http, neo4j_uri, 1.5)
-
-    async def _qdrant_check():
-        try_urls = [qdrant_url.rstrip('/'), qdrant_url.rstrip('/') + '/api/health', qdrant_url.rstrip('/') + '/collections']
-        for u in try_urls:
-            ok = await asyncio.to_thread(_check_http, u, 1.5)
-            if ok:
-                return True
-        return False
-
-    async def _llm_check():
-        try_urls = [llm_url.rstrip('/'), llm_url.rstrip('/') + '/v1/models', llm_url.rstrip('/') + '/health']
-        for u in try_urls:
-            ok = await asyncio.to_thread(_check_http, u, 1.5)
-            if ok:
-                return True
-        return False
-
-    neo_ok, qdrant_ok, llm_ok = await asyncio.gather(_neo_check(), _qdrant_check(), _llm_check())
-    return {"neo4j": bool(neo_ok), "qdrant": bool(qdrant_ok), "llm": bool(llm_ok)}
-
+# --- Status-Tracker für Background-Poller ---
+_STATUS_LAST = None
+_STATUS_SUBSCRIBERS = set()
 
 # --- Neues: zentraler Background-Poller und Subscriber-Mechanik ---
+
+
 async def _background_status_poller(interval: int = 5):
     """Periodisch _probe_services ausführen und Unterschiede an Subscriber broadcasten."""
-    global _STATUS_LAST, _STATUS_SUBSCRIBERS
+    global _STATUS_LAST
     while True:
         try:
+            # pragmatic probe: check adapters' health_check if available
             state = await _probe_services()
             if _STATUS_LAST is None or state != _STATUS_LAST:
                 _STATUS_LAST = state
@@ -729,88 +740,89 @@ async def _status_stream_generator(poll_interval: int = 5):
             pass
 
 
-# Simple helper to run with `python -m uvicorn src.web.app:app --reload`
-@app.get('/api/status/stream')
-async def api_status_stream():
-    return StreamingResponse(_status_stream_generator(), media_type='text/event-stream')
-
-
-@app.get("/status/qdrant/points")
-async def status_qdrant_points(limit: int = 20):
-    """Debug endpoint: list count and up to `limit` points (id + payload keys + content) from Qdrant collection.
-    Safe: imports qdrant_client lazily and returns errors in JSON instead of raising.
+async def _probe_services() -> dict:
+    """Pragmatischer Service-Checker, der vorhandene Adapter health_check() aufruft.
+    Liefert ein dict mit keys: neo4j, qdrant, llm.
     """
-    col = os.environ.get('QDRANT_COLLECTION') or os.environ.get('CHROMA_COLLECTION') or 'rag_documents'
-    host = os.environ.get('QDRANT_HOST', 'http://localhost:6333')
-    port = int(os.environ.get('QDRANT_PORT', 6333))
+    res = {
+        "neo4j": False,
+        "qdrant": False,
+        "llm": False,
+    }
     try:
-        from qdrant_client import QdrantClient
-    except Exception as e:
-        return JSONResponse({"ok": False, "error": f"qdrant-client not installed: {e}"}, status_code=500)
-
-    try:
-        client = QdrantClient(url=host) if str(host).startswith('http') else QdrantClient(host=host, port=port)
-    except Exception as e:
-        return JSONResponse({"ok": False, "error": f"Failed to create Qdrant client: {e}"}, status_code=500)
-
-    try:
-        cnt = client.count(collection_name=col)
-        total = getattr(cnt, 'count', None)
-    except Exception as e:
-        total = None
-        count_error = str(e)
-    else:
-        count_error = None
-
-    samples = []
-    try:
-        pts = client.scroll(collection_name=col, limit=limit)
-        # pts can be dict or iterable depending on client version
-        if isinstance(pts, dict) and 'points' in pts:
-            pts_list = pts['points']
-        else:
-            pts_list = list(pts)
-        for p in pts_list:
-            # Build a defensive extraction since qdrant-client may return different types/structures
-            pid = None
-            payload = {}
-            raw_repr = None
+        vs = get_vector_store()
+        if vs and hasattr(vs, "health_check"):
             try:
-                raw_repr = repr(p)
+                h = await vs.health_check()
+                res["qdrant"] = bool(h.get("ok", True)) if isinstance(h, dict) else True
             except Exception:
-                raw_repr = str(p)
+                res["qdrant"] = False
+        else:
+            res["qdrant"] = vs is not None
+    except Exception:
+        res["qdrant"] = False
 
-            # dict-like responses
-            if isinstance(p, dict):
-                pid = p.get('id') or p.get('point', {}).get('id') if isinstance(p.get('point'), dict) else p.get('id')
-                payload = p.get('payload') or (p.get('point', {}) or {}).get('payload') or {}
-            else:
-                # object-like responses (qdrant-client models)
-                # common attributes: id, payload, point
-                pid = getattr(p, 'id', None)
-                if pid is None:
-                    # sometimes nested under .point.id
-                    point_obj = getattr(p, 'point', None)
-                    if point_obj is not None:
-                        pid = getattr(point_obj, 'id', None)
-                        payload = getattr(point_obj, 'payload', None) or {}
-                else:
-                    payload = getattr(p, 'payload', None) or {}
-            # ensure payload is a dict
-            if not isinstance(payload, dict):
-                try:
-                    # try to coerce dataclass/obj to dict
-                    payload = dict(payload)
-                except Exception:
-                    payload = {}
+    try:
+        gs = get_graph_store()
+        if gs and hasattr(gs, "health_check"):
+            try:
+                h = await gs.health_check()
+                res["neo4j"] = bool(h.get("ok", True)) if isinstance(h, dict) else True
+            except Exception:
+                res["neo4j"] = False
+        else:
+            res["neo4j"] = gs is not None
+    except Exception:
+        res["neo4j"] = False
 
-            samples.append({
-                'id': None if pid is None else str(pid),
-                'payload_keys': list(payload.keys()) if isinstance(payload, dict) else None,
-                'content': payload.get('content') if isinstance(payload, dict) else None,
-                'raw': raw_repr,
-            })
+    try:
+        llm = get_llm()
+        if llm and hasattr(llm, "health_check"):
+            try:
+                h = await llm.health_check()
+                res["llm"] = bool(h.get("ok", True)) if isinstance(h, dict) else True
+            except Exception:
+                res["llm"] = False
+        else:
+            res["llm"] = llm is not None
+    except Exception:
+        res["llm"] = False
+
+    return res
+
+
+@app.get("/status/stream")
+async def status_stream(request: Request):
+    """Server-Sent Events Stream für Status-Updates"""
+    async def event_stream():
+        # initial sofortigen Status senden
+        if '_STATUS_LAST' in globals() and _STATUS_LAST is not None:
+            yield f"data: {json.dumps(_STATUS_LAST)}\n\n"
+        try:
+            while True:
+                # Warte auf neue Status-Nachricht oder Timeout
+                msg = await asyncio.wait_for(request.app.state.status_queue.get(), timeout=5.0)
+                yield msg
+        except asyncio.TimeoutError:
+            # Timeout, einfach weitermachen
+            pass
+        except Exception:
+            # Fehler ignorieren, Poller weitermachen
+            pass
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+@app.get("/debug/clear")
+async def debug_clear():
+    """Debug-Route: löscht alle Daten in Qdrant und Neo4j"""
+    try:
+        vector_store = get_vector_store()
+        graph_store = get_graph_store()
+        if vector_store is not None:
+            await vector_store.clear()
+        if graph_store is not None:
+            await graph_store.clear()
+        return JSONResponse({"ok": True, "message": "Daten gelöscht"})
     except Exception as e:
-        return JSONResponse({"ok": False, "error": f"Failed to scroll points: {e}"}, status_code=500)
-
-    return JSONResponse({"ok": True, "collection": col, "total": total, "count_error": count_error, "samples": samples})
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)

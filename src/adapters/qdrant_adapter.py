@@ -19,8 +19,15 @@ class QdrantAdapter:
         self._client = None
         self._collection_name = (self.config.get("collection_name") or os.environ.get("QDRANT_COLLECTION")
                                  or os.environ.get("CHROMA_COLLECTION") or "rag_documents")
-        self._hosts = self.config.get("hosts") or os.environ.get("QDRANT_HOST", "http://localhost:6333")
-        self._port = int(self.config.get("port") or os.environ.get("QDRANT_PORT", 6333))
+        # Prefer a full URL provided via QDRANT_URL (start script exports this when using dynamic host ports).
+        # Fallback to QDRANT_HOST / QDRANT_PORT for backwards compatibility.
+        self._hosts = self.config.get("hosts") or os.environ.get("QDRANT_URL") or os.environ.get("QDRANT_HOST") or "http://localhost:6333"
+        # Support explicit host-port environment variable sometimes set by helper scripts
+        qport = os.environ.get("QDRANT_HOST_PORT") or os.environ.get("QDRANT_PORT")
+        try:
+            self._port = int(self.config.get("port") or (int(qport) if qport is not None else 6333))
+        except Exception:
+            self._port = 6333
         self._vector_size = int(self.config.get("dimension", 384))
         self._distance = (self.config.get("distance") or "Cosine").lower()
 
@@ -33,11 +40,12 @@ class QdrantAdapter:
 
         try:
             # Support full URL in QDRANT_HOST or host/port split
-            if isinstance(self._hosts, str) and self._hosts.startswith("http"):
-                # QdrantClient accepts url parameter
+            if isinstance(self._hosts, str) and str(self._hosts).startswith("http"):
+                # QdrantClient accepts url parameter (preferred when full URL available)
                 self._client = QdrantClient(url=self._hosts)
             else:
-                self._client = QdrantClient(host=self._hosts, port=self._port)
+                # If _hosts is not a URL (e.g. "localhost"), use host/port
+                self._client = QdrantClient(host=self._hosts or 'localhost', port=self._port)
 
             # map distance
             if self._distance == "cosine":
@@ -48,8 +56,47 @@ class QdrantAdapter:
                 metric = qmodels.Distance.EUCLID
 
             # create collection if not exists
-            existing = self._client.get_collections().collections
-            names = [c.name for c in existing]
+            try:
+                existing_resp = self._client.get_collections()
+            except Exception:
+                # Log full exception and raise to avoid silently continuing with None
+                logger.exception("Qdrant: get_collections() failed; client=%r host=%s port=%s", getattr(self._client, '__class__', None), self._hosts, self._port)
+                # Re-raise to surface the root cause to the caller for analysis
+                raise
+
+            # Normalize collections list for different client versions
+            existing = []
+            if existing_resp is None:
+                existing = []
+            else:
+                # some clients return an object with `.collections`, others a dict
+                if hasattr(existing_resp, 'collections'):
+                    existing = existing_resp.collections or []
+                elif isinstance(existing_resp, dict):
+                    existing = existing_resp.get('collections', []) or []
+                else:
+                    # fallback: try to coerce iterable
+                    try:
+                        existing = list(existing_resp)
+                    except Exception:
+                        existing = []
+
+            # Build list of existing collection names defensively
+            names = []
+            for c in existing:
+                if c is None:
+                    continue
+                if hasattr(c, 'name'):
+                    try:
+                        names.append(c.name)
+                    except Exception:
+                        continue
+                elif isinstance(c, dict) and 'name' in c:
+                    names.append(c.get('name'))
+                else:
+                    # unknown shape -> skip
+                    continue
+
             if self._collection_name not in names:
                 self._client.recreate_collection(
                     collection_name=self._collection_name,

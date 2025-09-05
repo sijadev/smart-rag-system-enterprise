@@ -82,12 +82,14 @@ async def new_chat(request: Request):
 # Globale RAG-Instanz für UI und CLI
 smart_rag = None
 neo4j_working = False
+# Global config holder (set by initialize_rag)
+global_config = None
 
 # Initialisierung für UI und CLI
 
 
 async def initialize_rag():
-    global smart_rag, neo4j_working
+    global smart_rag, neo4j_working, global_config
     config = RAGConfig(
         neo4j_uri=os.getenv("NEO4J_URI", "bolt://localhost:7687"),
         neo4j_user=os.getenv("NEO4J_USER", "neo4j"),
@@ -96,6 +98,8 @@ async def initialize_rag():
         llm_provider="local",
         documents_path="data/documents",
     )
+    # set global_config for use in other routines
+    global_config = config
     neo4j_working = False
     try:
         from neo4j import GraphDatabase
@@ -169,10 +173,12 @@ async def main():
     # Wenn Neo4j Enterprise nicht funktioniert, deaktiviere es vollständig
     if not neo4j_working:
         print("📝 Neo4j Enterprise not available - switching to local-only mode")
-        config.neo4j_password = None  # Deaktiviere Neo4j komplett
-        config.neo4j_database = None
+        # use global_config set by initialize_rag
+        if global_config is not None:
+            global_config.neo4j_password = None  # Deaktiviere Neo4j komplett
+            global_config.neo4j_database = None
 
-    base_rag = AdvancedRAGSystem(config)
+    base_rag = AdvancedRAGSystem(global_config or RAGConfig())
 
     # Enterprise Learning Configuration
     learning_config = LearningConfig(

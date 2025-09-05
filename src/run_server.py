@@ -332,7 +332,8 @@ def get_status():
 
 
 @app.get('/api/status')
-async def status():
+async def status_endpoint():
+    """Return aggregated service status."""
     return JSONResponse(get_status())
 
 # SSE stream endpoint
