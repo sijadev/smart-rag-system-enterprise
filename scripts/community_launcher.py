@@ -7,11 +7,12 @@ Startet das RAG-System mit Neo4j Community Edition.
 Alle Kern-RAG-Funktionen verfügbar, ohne Enterprise-Features wie GDS.
 """
 
+import asyncio
 import subprocess
 import sys
 import time
-import asyncio
 from pathlib import Path
+
 
 class CommunityRAGLauncher:
     """Launcher für Neo4j Community RAG System"""
@@ -22,8 +23,9 @@ class CommunityRAGLauncher:
     def check_docker(self):
         """Prüft ob Docker läuft"""
         try:
-            result = subprocess.run(['docker', '--version'],
-                                  capture_output=True, text=True)
+            result = subprocess.run(
+                ["docker", "--version"], capture_output=True, text=True
+            )
             if result.returncode == 0:
                 print(f"✅ Docker verfügbar: {result.stdout.strip()}")
                 return True
@@ -50,15 +52,14 @@ class CommunityRAGLauncher:
         try:
             # Stoppe zunächst Enterprise-Services falls aktiv
             print("🛑 Stoppe eventuell laufende Enterprise-Services...")
-            subprocess.run(['docker-compose', 'down'],
-                         capture_output=True)
+            subprocess.run(["docker-compose", "down"], capture_output=True)
 
             # Starte Community-Services
-            result = subprocess.run([
-                'docker-compose',
-                '-f', self.compose_file,
-                'up', '-d'
-            ], capture_output=True, text=True)
+            result = subprocess.run(
+                ["docker-compose", "-f", self.compose_file, "up", "-d"],
+                capture_output=True,
+                text=True,
+            )
 
             if result.returncode == 0:
                 print("✅ Neo4j Community Services erfolgreich gestartet!")
@@ -79,11 +80,22 @@ class CommunityRAGLauncher:
         start_time = time.time()
         while time.time() - start_time < timeout:
             try:
-                result = subprocess.run([
-                    'docker', 'exec', 'neo4j-rag-community',
-                    'cypher-shell', '-u', 'neo4j', '-p', 'password123',
-                    'RETURN 1 as status'
-                ], capture_output=True, text=True, timeout=5)
+                result = subprocess.run(
+                    [
+                        "docker",
+                        "exec",
+                        "neo4j-rag-community",
+                        "cypher-shell",
+                        "-u",
+                        "neo4j",
+                        "-p",
+                        "password123",
+                        "RETURN 1 as status",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
 
                 if result.returncode == 0:
                     print("✅ Neo4j Community ist bereit!")
@@ -102,9 +114,9 @@ class CommunityRAGLauncher:
 
     def show_connection_info(self):
         """Zeigt Verbindungsinformationen"""
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print("🎯 NEO4J COMMUNITY RAG SYSTEM BEREIT")
-        print("="*60)
+        print("=" * 60)
         print("🌐 Neo4j Browser:     http://localhost:7474")
         print("🔗 Bolt Connection:   bolt://localhost:7687")
         print("👤 Username:          neo4j")
@@ -117,7 +129,7 @@ class CommunityRAGLauncher:
         print("   ✅ Auto-Import Workflow")
         print("   ❌ Graph Data Science (Enterprise only)")
         print("   ❌ Multi-Database (Enterprise only)")
-        print("="*60)
+        print("=" * 60)
 
     def launch_rag_system(self):
         """Startet das RAG-System mit Community-Konfiguration"""
@@ -125,9 +137,7 @@ class CommunityRAGLauncher:
 
         try:
             # Importiere und starte das RAG-System
-            subprocess.run([
-                sys.executable, 'rag_chat.py'
-            ], check=True)
+            subprocess.run([sys.executable, "rag_chat.py"], check=True)
 
         except KeyboardInterrupt:
             print("\n👋 RAG-System gestoppt")
@@ -141,11 +151,21 @@ class CommunityRAGLauncher:
 
         # Teste Neo4j-Verbindung
         try:
-            result = subprocess.run([
-                'docker', 'exec', 'neo4j-rag-community',
-                'cypher-shell', '-u', 'neo4j', '-p', 'password123',
-                'CREATE (demo:Demo {name: "Community Test", timestamp: datetime()}) RETURN demo'
-            ], capture_output=True, text=True)
+            result = subprocess.run(
+                [
+                    "docker",
+                    "exec",
+                    "neo4j-rag-community",
+                    "cypher-shell",
+                    "-u",
+                    "neo4j",
+                    "-p",
+                    "password123",
+                    'CREATE (demo:Demo {name: "Community Test", timestamp: datetime()}) RETURN demo',
+                ],
+                capture_output=True,
+                text=True,
+            )
 
             if result.returncode == 0:
                 print("✅ Neo4j Community Test erfolgreich!")
@@ -161,11 +181,11 @@ class CommunityRAGLauncher:
         print("🛑 Stoppe Neo4j Community Services...")
 
         try:
-            result = subprocess.run([
-                'docker-compose',
-                '-f', self.compose_file,
-                'down'
-            ], capture_output=True, text=True)
+            result = subprocess.run(
+                ["docker-compose", "-f", self.compose_file, "down"],
+                capture_output=True,
+                text=True,
+            )
 
             if result.returncode == 0:
                 print("✅ Services erfolgreich gestoppt")
@@ -224,7 +244,7 @@ def main():
         "--mode",
         choices=["full", "demo", "chat", "stop"],
         default="full",
-        help="Launch mode (default: full)"
+        help="Launch mode (default: full)",
     )
 
     args = parser.parse_args()

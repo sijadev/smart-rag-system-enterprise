@@ -6,8 +6,9 @@ Builder Pattern für RAG System Konfiguration
 Implementiert flexible Builder für komplexe Systemkonfigurationen
 """
 
-from typing import Dict, Any, Optional, List, Callable
 from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, List, Optional
+
 from ..interfaces import LLMProvider, RetrievalStrategy
 
 
@@ -34,7 +35,8 @@ class RAGSystemConfig:
 
     # Database Configuration
     enable_graph_store: bool = True
-    vector_store_type: str = "chroma"
+    # Default to qdrant as the vector store
+    vector_store_type: str = "qdrant"
     vector_store_path: str = "./data/vectors"
     collection_name: str = "rag_documents"
     neo4j_uri: Optional[str] = "bolt://localhost:7687"
@@ -72,19 +74,24 @@ class RAGSystemBuilder:
         self._validation_rules: List[Callable[[RAGSystemConfig], bool]] = []
 
     # Core Configuration
-    def with_name(self, name: str) -> 'RAGSystemBuilder':
+    def with_name(self, name: str) -> "RAGSystemBuilder":
         """Setzt System-Namen"""
         self.config.system_name = name
         return self
 
-    def with_version(self, version: str) -> 'RAGSystemBuilder':
+    def with_version(self, version: str) -> "RAGSystemBuilder":
         """Setzt Version"""
         self.config.version = version
         return self
 
     # LLM Configuration
-    def with_llm_provider(self, provider: LLMProvider, model_name: str = None,
-                          api_key: str = None, base_url: str = None) -> 'RAGSystemBuilder':
+    def with_llm_provider(
+        self,
+        provider: LLMProvider,
+        model_name: str = None,
+        api_key: str = None,
+        base_url: str = None,
+    ) -> "RAGSystemBuilder":
         """Konfiguriert LLM Provider"""
         self.config.llm_provider = provider
         if model_name:
@@ -95,20 +102,30 @@ class RAGSystemBuilder:
             self.config.base_url = base_url
         return self
 
-    def with_ollama(self, model_name: str = "llama3.2:latest", base_url: str = "http://localhost:11434") -> 'RAGSystemBuilder':
+    def with_ollama(
+        self,
+        model_name: str = "llama3.2:latest",
+        base_url: str = "http://localhost:11434",
+    ) -> "RAGSystemBuilder":
         """Konfiguriert Ollama LLM"""
         return self.with_llm_provider(LLMProvider.OLLAMA, model_name, base_url=base_url)
 
-    def with_openai(self, model_name: str = "gpt-4", api_key: str = None) -> 'RAGSystemBuilder':
+    def with_openai(
+        self, model_name: str = "gpt-4", api_key: str = None
+    ) -> "RAGSystemBuilder":
         """Konfiguriert OpenAI LLM"""
         return self.with_llm_provider(LLMProvider.OPENAI, model_name, api_key=api_key)
 
-    def with_anthropic(self, model_name: str = "claude-3-sonnet-20240229", api_key: str = None) -> 'RAGSystemBuilder':
+    def with_anthropic(
+        self, model_name: str = "claude-3-sonnet-20240229", api_key: str = None
+    ) -> "RAGSystemBuilder":
         """Konfiguriert Anthropic LLM"""
-        return self.with_llm_provider(LLMProvider.ANTHROPIC, model_name, api_key=api_key)
+        return self.with_llm_provider(
+            LLMProvider.ANTHROPIC, model_name, api_key=api_key
+        )
 
     # Neue LLM Helper: Temperatur setzen
-    def with_temperature(self, temperature: float) -> 'RAGSystemBuilder':
+    def with_temperature(self, temperature: float) -> "RAGSystemBuilder":
         """Setzt die Default-Temperature für das LLM (0.0 - 1.0).
 
         Fügt eine Validierungsregel hinzu, damit ungültige Werte beim Aufruf von build() einen Fehler auslösen.
@@ -127,25 +144,27 @@ class RAGSystemBuilder:
         return self
 
     # Retrieval Configuration
-    def with_retrieval_strategy(self, strategy: RetrievalStrategy) -> 'RAGSystemBuilder':
+    def with_retrieval_strategy(
+        self, strategy: RetrievalStrategy
+    ) -> "RAGSystemBuilder":
         """Setzt Standard-Retrieval-Strategie"""
         self.config.default_retrieval_strategy = strategy
         return self
 
-    def with_hybrid_retrieval(self) -> 'RAGSystemBuilder':
+    def with_hybrid_retrieval(self) -> "RAGSystemBuilder":
         """Konfiguriert Hybrid-Retrieval (Vector + Graph)"""
         return self.with_retrieval_strategy(RetrievalStrategy.HYBRID)
 
-    def with_vector_only_retrieval(self) -> 'RAGSystemBuilder':
+    def with_vector_only_retrieval(self) -> "RAGSystemBuilder":
         """Konfiguriert Vector-Only Retrieval"""
         return self.with_retrieval_strategy(RetrievalStrategy.VECTOR_ONLY)
 
-    def with_graph_only_retrieval(self) -> 'RAGSystemBuilder':
+    def with_graph_only_retrieval(self) -> "RAGSystemBuilder":
         """Konfiguriert Graph-Only Retrieval"""
         return self.with_retrieval_strategy(RetrievalStrategy.GRAPH_ONLY)
 
     # Neuer Helper: retrieval_k setzen
-    def with_retrieval_k(self, k: int) -> 'RAGSystemBuilder':
+    def with_retrieval_k(self, k: int) -> "RAGSystemBuilder":
         """Setzt die Anzahl der Retrieval-Ergebnisse (k)."""
         self.config.retrieval_k = int(k)
 
@@ -159,13 +178,20 @@ class RAGSystemBuilder:
         return self
 
     # Database Configuration
-    def with_vector_store(self, store_type: str = "chroma", path: str = "./data/vectors") -> 'RAGSystemBuilder':
+    def with_vector_store(
+        self, store_type: str = "qdrant", path: str = "./data/vectors"
+    ) -> "RAGSystemBuilder":
         """Konfiguriert Vector Store"""
         self.config.vector_store_type = store_type
         self.config.vector_store_path = path
         return self
 
-    def with_neo4j(self, uri: str = "bolt://localhost:7687", user: str = "neo4j", password: str = None) -> 'RAGSystemBuilder':
+    def with_neo4j(
+        self,
+        uri: str = "bolt://localhost:7687",
+        user: str = "neo4j",
+        password: str = None,
+    ) -> "RAGSystemBuilder":
         """Konfiguriert Neo4j Graph Store"""
         self.config.enable_graph_store = True
         self.config.neo4j_uri = uri
@@ -173,53 +199,61 @@ class RAGSystemBuilder:
         self.config.neo4j_password = password
         return self
 
-    def with_neo4j_enterprise(self, uri: str, user: str, password: str) -> 'RAGSystemBuilder':
+    def with_neo4j_enterprise(
+        self, uri: str, user: str, password: str
+    ) -> "RAGSystemBuilder":
         """Konfiguriert Neo4j Enterprise"""
         return self.with_neo4j(uri, user, password)
 
-    def without_graph_store(self) -> 'RAGSystemBuilder':
+    def without_graph_store(self) -> "RAGSystemBuilder":
         """Deaktiviert Graph Store"""
         self.config.enable_graph_store = False
         return self
 
     # Monitoring & Learning
-    def with_monitoring(self, enabled: bool = True) -> 'RAGSystemBuilder':
+    def with_monitoring(self, enabled: bool = True) -> "RAGSystemBuilder":
         """Aktiviert/Deaktiviert Monitoring"""
         self.config.enable_monitoring = enabled
         return self
 
-    def with_learning(self, enabled: bool = True) -> 'RAGSystemBuilder':
+    def with_learning(self, enabled: bool = True) -> "RAGSystemBuilder":
         """Aktiviert/Deaktiviert Learning"""
         self.config.enable_learning = enabled
         return self
 
     # Security Configuration
-    def with_security(self, enabled: bool = True, rate_limit: int = 100) -> 'RAGSystemBuilder':
+    def with_security(
+        self, enabled: bool = True, rate_limit: int = 100
+    ) -> "RAGSystemBuilder":
         """Konfiguriert Security Settings"""
         self.config.enable_security = enabled
         self.config.rate_limit_requests = rate_limit
         return self
 
-    def without_security(self) -> 'RAGSystemBuilder':
+    def without_security(self) -> "RAGSystemBuilder":
         """Deaktiviert Security Features"""
         self.config.enable_security = False
         return self
 
     # Performance Configuration
-    def with_caching(self, enabled: bool = True, ttl: int = 3600) -> 'RAGSystemBuilder':
+    def with_caching(self, enabled: bool = True, ttl: int = 3600) -> "RAGSystemBuilder":
         """Konfiguriert Caching"""
         self.config.enable_caching = enabled
         self.config.cache_ttl = ttl
         return self
 
-    def with_parallel_processing(self, enabled: bool = True, max_workers: int = 4) -> 'RAGSystemBuilder':
+    def with_parallel_processing(
+        self, enabled: bool = True, max_workers: int = 4
+    ) -> "RAGSystemBuilder":
         """Konfiguriert Parallel Processing"""
         self.config.parallel_processing = enabled
         self.config.max_workers = max_workers
         return self
 
     # Validation
-    def add_validation_rule(self, rule: Callable[[RAGSystemConfig], bool]) -> 'RAGSystemBuilder':
+    def add_validation_rule(
+        self, rule: Callable[[RAGSystemConfig], bool]
+    ) -> "RAGSystemBuilder":
         """Fügt Validierungsregel hinzu"""
         self._validation_rules.append(rule)
         return self
@@ -240,62 +274,73 @@ class RAGSystemBuilder:
 
 # Convenience Factory Functions
 
+
 def create_development_config() -> RAGSystemConfig:
     """Erstellt Development-Konfiguration"""
-    return (RAGSystemBuilder()
-            .with_name("SmartRAG-Dev")
-            .with_ollama()
-            .with_hybrid_retrieval()
-            .with_vector_store()
-            .with_neo4j()
-            .with_monitoring(True)
-            .with_learning(True)
-            .without_security()
-            .with_caching(True)
-            .build())
+    return (
+        RAGSystemBuilder()
+        .with_name("SmartRAG-Dev")
+        .with_ollama()
+        .with_hybrid_retrieval()
+        .with_vector_store()
+        .with_neo4j()
+        .with_monitoring(True)
+        .with_learning(True)
+        .without_security()
+        .with_caching(True)
+        .build()
+    )
 
 
 def create_production_config() -> RAGSystemConfig:
     """Erstellt Production-Konfiguration"""
-    return (RAGSystemBuilder()
-            .with_name("SmartRAG-Prod")
-            .with_ollama()
-            .with_hybrid_retrieval()
-            .with_vector_store("chroma", "./prod/vectors")
-            .with_neo4j("bolt://localhost:7687", "neo4j")
-            .with_monitoring(True)
-            .with_learning(True)
-            .with_security(True, 1000)
-            .with_caching(True, 7200)
-            .with_parallel_processing(True, 8)
-            .build())
+    return (
+        RAGSystemBuilder()
+        .with_name("SmartRAG-Prod")
+        .with_ollama()
+        .with_hybrid_retrieval()
+        .with_vector_store("qdrant", "./prod/vectors")
+        .with_neo4j("bolt://localhost:7687", "neo4j")
+        .with_monitoring(True)
+        .with_learning(True)
+        .with_security(True, 1000)
+        .with_caching(True, 7200)
+        .with_parallel_processing(True, 8)
+        .build()
+    )
 
 
 def create_minimal_config() -> RAGSystemConfig:
     """Erstellt minimale Konfiguration für Tests"""
-    return (RAGSystemBuilder()
-            .with_name("SmartRAG-Minimal")
-            .with_ollama()
-            .with_vector_only_retrieval()
-            .with_vector_store()
-            .without_graph_store()
-            .with_monitoring(False)
-            .with_learning(False)
-            .without_security()
-            .build())
+    return (
+        RAGSystemBuilder()
+        .with_name("SmartRAG-Minimal")
+        .with_ollama()
+        .with_vector_only_retrieval()
+        .with_vector_store()
+        .without_graph_store()
+        .with_monitoring(False)
+        .with_learning(False)
+        .without_security()
+        .build()
+    )
 
 
 def create_enterprise_config() -> RAGSystemConfig:
     """Erstellt Enterprise-Konfiguration"""
-    return (RAGSystemBuilder()
-            .with_name("SmartRAG-Enterprise")
-            .with_ollama()
-            .with_hybrid_retrieval()
-            .with_vector_store("chroma", "./enterprise/vectors")
-            .with_neo4j_enterprise("neo4j://enterprise:7687", "neo4j", "enterprise_password")
-            .with_monitoring(True)
-            .with_learning(True)
-            .with_security(True, 10000)
-            .with_caching(True, 14400)
-            .with_parallel_processing(True, 16)
-            .build())
+    return (
+        RAGSystemBuilder()
+        .with_name("SmartRAG-Enterprise")
+        .with_ollama()
+        .with_hybrid_retrieval()
+        .with_vector_store("qdrant", "./enterprise/vectors")
+        .with_neo4j_enterprise(
+            "neo4j://enterprise:7687", "neo4j", "enterprise_password"
+        )
+        .with_monitoring(True)
+        .with_learning(True)
+        .with_security(True, 10000)
+        .with_caching(True, 14400)
+        .with_parallel_processing(True, 16)
+        .build()
+    )

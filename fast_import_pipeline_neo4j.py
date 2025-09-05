@@ -5,10 +5,10 @@ Addresses connection generation issues and stores data in Neo4j
 
 import logging
 import os
-from typing import List, Dict, Tuple, Optional
 from dataclasses import dataclass
+from typing import Dict, List, Optional, Tuple
+
 import numpy as np
-from pathlib import Path
 
 # Import central config instead of loading .env directly
 try:
@@ -19,19 +19,26 @@ except ImportError:
 
 # Import required libraries
 try:
-    from PyPDF2 import PdfReader
     import sentence_transformers
-    from sklearn.metrics.pairwise import cosine_similarity
-    import chromadb
     from neo4j import GraphDatabase
-    import httpx
+    from PyPDF2 import PdfReader
+    from sklearn.metrics.pairwise import cosine_similarity
 except ImportError as e:
+    # Provide safe fallbacks for static analysis and runtime checks
+    sentence_transformers = None
+    GraphDatabase = None
+    PdfReader = None
+    cosine_similarity = None
     print(f"Required libraries not installed: {e}")
-    print("Please install: pip install PyPDF2 sentence-transformers scikit-learn chromadb neo4j httpx")
+    print(
+        "Please install: pip install PyPDF2 sentence-transformers scikit-learn qdrant-client neo4j httpx"
+    )
+
 
 @dataclass
 class DocumentChunk:
     """Represents a document chunk with metadata"""
+
     id: str
     content: str
     page_number: int
@@ -43,18 +50,21 @@ class DocumentChunk:
         if self.connections is None:
             self.connections = []
 
+
 class FastImportPipelineNeo4j:
     """Enhanced pipeline for fast PDF import with connection generation and Neo4j storage"""
 
-    def __init__(self,
-                 chunk_size: int = 500,
-                 chunk_overlap: int = 100,
-                 similarity_threshold: float = 0.7,
-                 max_connections_per_chunk: int = 5,
-                 neo4j_uri: str = None,
-                 neo4j_user: str = None,
-                 neo4j_password: str = None,
-                 config: CentralConfig = None):
+    def __init__(
+        self,
+        chunk_size: int = 500,
+        chunk_overlap: int = 100,
+        similarity_threshold: float = 0.7,
+        max_connections_per_chunk: int = 5,
+        neo4j_uri: str = None,
+        neo4j_user: str = None,
+        neo4j_password: str = None,
+        config: CentralConfig = None,
+    ):
         """
         Initialize the import pipeline
 
@@ -93,8 +103,12 @@ class FastImportPipelineNeo4j:
         self.logger = logging.getLogger(__name__)
 
         # Log the configuration being used (without exposing password)
-        self.logger.info(f"Neo4j Configuration: URI={self.neo4j_uri}, User={self.neo4j_user}")
-        self.logger.info(f"Using Neo4j password from environment: {'✅ Found' if os.getenv('NEO4J_PASSWORD') else '⚠️ Using fallback'}")
+        self.logger.info(
+            f"Neo4j Configuration: URI={self.neo4j_uri}, User={self.neo4j_user}"
+        )
+        self.logger.info(
+            f"Using Neo4j password from environment: {'✅ Found' if os.getenv('NEO4J_PASSWORD') else '⚠️ Using fallback'}"
+        )
 
     def initialize_components(self):
         """Initialize embedding model, vector database, and Neo4j"""
@@ -102,28 +116,47 @@ class FastImportPipelineNeo4j:
             # Initialize embedding model
             self.logger.info("Loading embedding model...")
             self.embedding_model = sentence_transformers.SentenceTransformer(
-                'all-MiniLM-L6-v2'
+                "all-MiniLM-L6-v2"
             )
 
-            # Initialize ChromaDB with telemetry disabled
-            self.logger.info("Initializing vector database...")
-            import chromadb.config
-
-            self.vector_db = chromadb.Client(chromadb.config.Settings(
-                anonymized_telemetry=False,
-                allow_reset=True
-            ))
-
-            # Create or get collection
+            # Initialize Qdrant adapter
+            self.logger.info("Initializing Qdrant vector store...")
             try:
-                self.collection = self.vector_db.get_collection("rag_documents")
-                self.logger.info("Using existing collection: rag_documents")
-            except:
-                self.collection = self.vector_db.create_collection(
-                    name="rag_documents",
-                    metadata={"hnsw:space": "cosine"}
-                )
-                self.logger.info("Created new collection: rag_documents")
+                # determine collection name and dimension
+                try:
+                    collection_name = self.config.database.collection_name or "rag_documents"
+                except Exception:
+                    collection_name = os.environ.get("QDRANT_COLLECTION", "rag_documents")
+
+                # embedding dimension: try config -> default 384
+                dim = 384
+                try:
+                    ollama_cfg = getattr(self.config, 'ollama', None)
+                    if isinstance(ollama_cfg, dict):
+                        emb_val = ollama_cfg.get('embedding_dimension')
+                        if emb_val is not None:
+                            dim = int(emb_val)
+                    else:
+                        dim = int(getattr(ollama_cfg, 'embedding_dimension', dim))
+                except Exception:
+                    dim = 384
+
+                qcfg = {
+                    "collection_name": collection_name,
+                    "hosts": os.environ.get("QDRANT_HOST", "http://localhost:6333"),
+                    "port": int(os.environ.get("QDRANT_PORT", 6333)),
+                    "dimension": dim,
+                }
+                from src.adapters.qdrant_adapter import QdrantAdapter
+
+                self.vector_db = QdrantAdapter(qcfg)
+                # in adapter, _use_qdrant shows success
+                if not getattr(self.vector_db, '_use_qdrant', False):
+                    self.logger.warning("Qdrant adapter initialized but client not available or collection not ready")
+
+            except Exception as e:
+                self.logger.error("Failed to initialize Qdrant adapter: %s", str(e))
+                raise
 
             # Try to initialize Neo4j connection with better error handling
             self.logger.info("Attempting to connect to Neo4j...")
@@ -132,8 +165,7 @@ class FastImportPipelineNeo4j:
 
             try:
                 self.neo4j_driver = GraphDatabase.driver(
-                    self.neo4j_uri,
-                    auth=(self.neo4j_user, self.neo4j_password)
+                    self.neo4j_uri, auth=(self.neo4j_user, self.neo4j_password)
                 )
 
                 # Test Neo4j connection with timeout
@@ -146,26 +178,35 @@ class FastImportPipelineNeo4j:
             except Exception as neo4j_error:
                 neo4j_error_msg = str(neo4j_error)
                 if "authentication failure" in neo4j_error_msg.lower():
-                    self.logger.error(f"❌ Neo4j authentication failed. Check username/password.")
-                    self.logger.info("💡 Default Neo4j credentials are often neo4j/neo4j or neo4j/password")
+                    self.logger.error(
+                        "❌ Neo4j authentication failed. Check username/password."
+                    )
+                    self.logger.info(
+                        "💡 Default Neo4j credentials are often neo4j/neo4j or neo4j/password"
+                    )
                 elif "connection refused" in neo4j_error_msg.lower():
-                    self.logger.error(f"❌ Neo4j not running. Start Neo4j first.")
+                    self.logger.error("❌ Neo4j not running. Start Neo4j first.")
                 else:
                     self.logger.error(f"❌ Neo4j connection failed: {neo4j_error_msg}")
 
-                self.logger.warning("⚠️ Pipeline will continue with ChromaDB only")
+                self.logger.warning("⚠️ Pipeline will continue with Qdrant only")
                 self.neo4j_driver = None
 
             # Store error for dashboard display
             self.neo4j_error = neo4j_error_msg
             self.neo4j_connected = neo4j_success
 
-            # Report success if at least embedding model and ChromaDB are working
+            # Report success if at least embedding model and ChromaDB are
+            # working
             if self.embedding_model and self.vector_db:
                 if neo4j_success:
-                    self.logger.info("✅ All components initialized successfully (ChromaDB + Neo4j)")
+                    self.logger.info(
+                        "✅ All components initialized successfully (Qdrant + Neo4j)"
+                    )
                 else:
-                    self.logger.info("✅ Core components initialized successfully (ChromaDB only)")
+                    self.logger.info(
+                        "✅ Core components initialized successfully (Qdrant only)"
+                    )
                 return True
             else:
                 self.logger.error("❌ Failed to initialize core components")
@@ -188,7 +229,7 @@ class FastImportPipelineNeo4j:
         pages_text = []
 
         try:
-            with open(pdf_path, 'rb') as file:
+            with open(pdf_path, "rb") as file:
                 pdf_reader = PdfReader(file)
 
                 for page_num, page in enumerate(pdf_reader.pages):
@@ -218,7 +259,7 @@ class FastImportPipelineNeo4j:
 
         for text, page_num in pages_text:
             # Split text into sentences for better chunking
-            sentences = text.split('.')
+            sentences = text.split(".")
             current_chunk = ""
             current_chunk_index = 0
 
@@ -228,13 +269,16 @@ class FastImportPipelineNeo4j:
                     continue
 
                 # Check if adding this sentence would exceed chunk size
-                if len(current_chunk) + len(sentence) > self.chunk_size and current_chunk:
+                if (
+                    len(current_chunk) + len(sentence) > self.chunk_size
+                    and current_chunk
+                ):
                     # Create chunk
                     chunk = DocumentChunk(
                         id=f"chunk_{chunk_id_counter}",
                         content=current_chunk.strip(),
                         page_number=page_num,
-                        chunk_index=current_chunk_index
+                        chunk_index=current_chunk_index,
                     )
                     chunks.append(chunk)
                     chunk_id_counter += 1
@@ -255,7 +299,7 @@ class FastImportPipelineNeo4j:
                     id=f"chunk_{chunk_id_counter}",
                     content=current_chunk.strip(),
                     page_number=page_num,
-                    chunk_index=current_chunk_index
+                    chunk_index=current_chunk_index,
                 )
                 chunks.append(chunk)
                 chunk_id_counter += 1
@@ -286,15 +330,14 @@ class FastImportPipelineNeo4j:
             # Generate embeddings in batches
             batch_size = 32
             for i in range(0, len(texts), batch_size):
-                batch_texts = texts[i:i+batch_size]
+                batch_texts = texts[i: i + batch_size]
                 batch_embeddings = self.embedding_model.encode(
-                    batch_texts,
-                    show_progress_bar=True
+                    batch_texts, show_progress_bar=True
                 )
 
                 # Assign embeddings to chunks
                 for j, embedding in enumerate(batch_embeddings):
-                    chunks[i+j].embeddings = embedding
+                    chunks[i + j].embeddings = embedding
 
             self.logger.info(f"✅ Generated embeddings for {len(chunks)} chunks")
             return True
@@ -328,14 +371,14 @@ class FastImportPipelineNeo4j:
 
                 # Get indices of chunks above threshold (excluding self)
                 similar_indices = np.where(
-                    (similarities > self.similarity_threshold) &
-                    (np.arange(len(similarities)) != i)
+                    (similarities > self.similarity_threshold)
+                    & (np.arange(len(similarities)) != i)
                 )[0]
 
                 # Sort by similarity and take top connections
                 similar_indices = similar_indices[
                     np.argsort(similarities[similar_indices])[::-1]
-                ][:self.max_connections_per_chunk]
+                ][: self.max_connections_per_chunk]
 
                 # Create connections with similarity scores
                 for idx in similar_indices:
@@ -347,7 +390,7 @@ class FastImportPipelineNeo4j:
                         connection_count += 1
 
                         # Store similarity score for Neo4j
-                        if not hasattr(chunk, 'connection_scores'):
+                        if not hasattr(chunk, "connection_scores"):
                             chunk.connection_scores = {}
                         chunk.connection_scores[connected_chunk_id] = similarity_score
 
@@ -357,7 +400,7 @@ class FastImportPipelineNeo4j:
                             connection_count += 1
 
                             # Store similarity score for reverse connection
-                            if not hasattr(chunks[idx], 'connection_scores'):
+                            if not hasattr(chunks[idx], "connection_scores"):
                                 chunks[idx].connection_scores = {}
                             chunks[idx].connection_scores[chunk.id] = similarity_score
 
@@ -389,14 +432,18 @@ class FastImportPipelineNeo4j:
 
             with self.neo4j_driver.session() as session:
                 # Create document node
-                session.run("""
+                session.run(
+                    """
                     MERGE (doc:Document {name: $pdf_name})
                     SET doc.processed_at = datetime()
-                """, pdf_name=pdf_name)
+                """,
+                    pdf_name=pdf_name,
+                )
 
                 # Create chunk nodes
                 for chunk in chunks:
-                    session.run("""
+                    session.run(
+                        """
                         MERGE (chunk:Chunk {id: $chunk_id})
                         SET chunk.content = $content,
                             chunk.page_number = $page_number,
@@ -406,42 +453,51 @@ class FastImportPipelineNeo4j:
                         MATCH (doc:Document {name: $pdf_name})
                         MERGE (doc)-[:CONTAINS]->(chunk)
                     """,
-                    chunk_id=chunk.id,
-                    content=chunk.content,
-                    page_number=chunk.page_number,
-                    chunk_index=chunk.chunk_index,
-                    connection_count=len(chunk.connections),
-                    pdf_name=pdf_name)
+                        chunk_id=chunk.id,
+                        content=chunk.content,
+                        page_number=chunk.page_number,
+                        chunk_index=chunk.chunk_index,
+                        connection_count=len(chunk.connections),
+                        pdf_name=pdf_name,
+                    )
 
                 # Create connections between chunks
                 connection_count = 0
                 for chunk in chunks:
                     for connected_chunk_id in chunk.connections:
-                        similarity_score = getattr(chunk, 'connection_scores', {}).get(connected_chunk_id, 0.0)
+                        similarity_score = getattr(chunk, "connection_scores", {}).get(
+                            connected_chunk_id, 0.0
+                        )
 
-                        session.run("""
+                        session.run(
+                            """
                             MATCH (chunk1:Chunk {id: $chunk1_id})
                             MATCH (chunk2:Chunk {id: $chunk2_id})
                             MERGE (chunk1)-[r:SIMILAR_TO]->(chunk2)
                             SET r.similarity = $similarity
                         """,
-                        chunk1_id=chunk.id,
-                        chunk2_id=connected_chunk_id,
-                        similarity=float(similarity_score))
+                            chunk1_id=chunk.id,
+                            chunk2_id=connected_chunk_id,
+                            similarity=float(similarity_score),
+                        )
 
                         connection_count += 1
 
                 # Update document stats
-                session.run("""
+                session.run(
+                    """
                     MATCH (doc:Document {name: $pdf_name})
                     SET doc.total_chunks = $total_chunks,
                         doc.total_connections = $total_connections
                 """,
-                pdf_name=pdf_name,
-                total_chunks=len(chunks),
-                total_connections=connection_count)
+                    pdf_name=pdf_name,
+                    total_chunks=len(chunks),
+                    total_connections=connection_count,
+                )
 
-            self.logger.info(f"✅ Stored {len(chunks)} chunks and {connection_count} connections in Neo4j")
+            self.logger.info(
+                f"✅ Stored {len(chunks)} chunks and {connection_count} connections in Neo4j"
+            )
             return True
 
         except Exception as e:
@@ -459,13 +515,13 @@ class FastImportPipelineNeo4j:
             Success status
         """
         try:
-            if not self.vector_db or not self.collection:
+            if not self.vector_db:
                 self.logger.error("❌ Vector database not initialized")
                 return False
 
             self.logger.info("💾 Storing chunks in vector database...")
 
-            # Prepare data for ChromaDB
+            # Prepare data for vector DB (Qdrant)
             ids = []
             documents = []
             embeddings = []
@@ -475,20 +531,26 @@ class FastImportPipelineNeo4j:
                 ids.append(chunk.id)
                 documents.append(chunk.content)
                 embeddings.append(chunk.embeddings.tolist())
-                metadatas.append({
-                    'page_number': chunk.page_number,
-                    'chunk_index': chunk.chunk_index,
-                    'connections': ','.join(chunk.connections),
-                    'connection_count': len(chunk.connections)
-                })
+                metadatas.append(
+                    {
+                        "page_number": chunk.page_number,
+                        "chunk_index": chunk.chunk_index,
+                        "connections": ",".join(chunk.connections),
+                        "connection_count": len(chunk.connections),
+                    }
+                )
 
-            # Store in ChromaDB
-            self.collection.add(
-                ids=ids,
-                documents=documents,
-                embeddings=embeddings,
-                metadatas=metadatas
-            )
+            # Store in Qdrant via adapter
+            try:
+                import asyncio
+
+                # QdrantAdapter.add_documents(documents, metadatas, embeddings)
+                asyncio.get_event_loop().run_until_complete(
+                    self.vector_db.add_documents(documents, metadatas, embeddings)
+                )
+            except Exception as e:
+                self.logger.error("Failed to add documents to Qdrant: %s", str(e))
+                raise
 
             self.logger.info(f"✅ Stored {len(chunks)} chunks in vector database")
             return True
@@ -508,18 +570,18 @@ class FastImportPipelineNeo4j:
             Import results dictionary
         """
         results = {
-            'success': False,
-            'chunks_created': 0,
-            'connections_created': 0,
-            'stored_in_neo4j': False,
-            'error_message': None
+            "success": False,
+            "chunks_created": 0,
+            "connections_created": 0,
+            "stored_in_neo4j": False,
+            "error_message": None,
         }
 
         try:
             # Initialize components if not already done
             if not self.embedding_model:
                 if not self.initialize_components():
-                    results['error_message'] = "Failed to initialize components"
+                    results["error_message"] = "Failed to initialize components"
                     return results
 
             # Get PDF name
@@ -530,18 +592,18 @@ class FastImportPipelineNeo4j:
             pages_text = self.extract_text_from_pdf(pdf_path)
 
             if not pages_text:
-                results['error_message'] = "No text extracted from PDF"
+                results["error_message"] = "No text extracted from PDF"
                 return results
 
             # Step 2: Create chunks
             chunks = self.create_chunks(pages_text)
             if not chunks:
-                results['error_message'] = "No chunks created"
+                results["error_message"] = "No chunks created"
                 return results
 
             # Step 3: Generate embeddings
             if not self.generate_embeddings(chunks):
-                results['error_message'] = "Failed to generate embeddings"
+                results["error_message"] = "Failed to generate embeddings"
                 return results
 
             # Step 4: Create connections
@@ -557,16 +619,18 @@ class FastImportPipelineNeo4j:
 
             # Update results
             self.chunks = chunks
-            results.update({
-                'success': True,
-                'chunks_created': len(chunks),
-                'connections_created': connections_created,
-                'pages_processed': len(pages_text),
-                'stored_in_neo4j': neo4j_success,
-                'stored_in_vector_db': vector_db_success
-            })
+            results.update(
+                {
+                    "success": True,
+                    "chunks_created": len(chunks),
+                    "connections_created": connections_created,
+                    "pages_processed": len(pages_text),
+                    "stored_in_neo4j": neo4j_success,
+                    "stored_in_vector_db": vector_db_success,
+                }
+            )
 
-            self.logger.info(f"🎉 PDF import completed successfully!")
+            self.logger.info("🎉 PDF import completed successfully!")
             self.logger.info(f"   📝 Chunks: {len(chunks)}")
             self.logger.info(f"   🔗 Connections: {connections_created}")
             self.logger.info(f"   💾 Neo4j: {'✅' if neo4j_success else '❌'}")
@@ -577,20 +641,19 @@ class FastImportPipelineNeo4j:
         except Exception as e:
             error_msg = f"Import failed: {str(e)}"
             self.logger.error(f"❌ {error_msg}")
-            results['error_message'] = error_msg
+            results["error_message"] = error_msg
             return results
 
     def get_stats(self) -> Dict[str, any]:
         """Get pipeline statistics"""
         return {
-            'total_chunks': len(self.chunks),
-            'total_connections': self.connection_count,
-            'avg_connections_per_chunk': (
-                self.connection_count / len(self.chunks)
-                if self.chunks else 0
+            "total_chunks": len(self.chunks),
+            "total_connections": self.connection_count,
+            "avg_connections_per_chunk": (
+                self.connection_count / len(self.chunks) if self.chunks else 0
             ),
-            'chunk_size': self.chunk_size,
-            'similarity_threshold': self.similarity_threshold
+            "chunk_size": self.chunk_size,
+            "similarity_threshold": self.similarity_threshold,
         }
 
     def search_similar_chunks(self, query: str, top_k: int = 5) -> List[Dict]:
@@ -604,20 +667,23 @@ class FastImportPipelineNeo4j:
         Returns:
             List of similar chunks with metadata
         """
-        if not self.embedding_model or not self.collection:
+        if not self.embedding_model or not self.vector_db:
             return []
 
         try:
             # Generate query embedding
-            query_embedding = self.embedding_model.encode([query])[0]
+            query_embedding = self.embedding_model.encode([query])[0].tolist()
 
-            # Search in ChromaDB
-            results = self.collection.query(
-                query_embeddings=[query_embedding.tolist()],
-                n_results=top_k
+            # Use qdrant adapter search
+            import asyncio
+
+            results = asyncio.get_event_loop().run_until_complete(
+                self.vector_db.search_similar(query_embedding, k=top_k)
             )
 
-            return results
+            # adapt to same return shape as Chroma's query for callers
+            # return a simplified dict/list structure
+            return {"documents": [[r.get('content') for r in results]], "metadatas": [[r.get('metadata') for r in results]], "distances": [[1.0 - r.get('score', 0.0) for r in results]]}
 
         except Exception as e:
             self.logger.error(f"❌ Search failed: {str(e)}")
@@ -639,7 +705,7 @@ if __name__ == "__main__":
         max_connections_per_chunk=3,
         neo4j_uri="bolt://localhost:7687",
         neo4j_user="neo4j",
-        neo4j_password="neo4j123"
+        neo4j_password="neo4j123",
     )
 
     # Import a PDF

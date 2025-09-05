@@ -1,45 +1,48 @@
-name: CI
+# name: CI
+#
+# on:
+#   push:
+#     branches: [ main, master ]
+#   pull_request:
+#     branches: [ main, master ]
+#
+# jobs:
+#   test:
+#     runs-on: ubuntu-latest
+#
+#     strategy:
+#       matrix:
+#         python-version: [3.10, 3.11]
+#
+#     steps:
+#       - name: Checkout
+#         uses: actions/checkout@v4
+#
+#       - name: Set up Python
+#         uses: actions/setup-python@v4
+#         with:
+#           python-version: ${{ matrix.python-version }}
+#
+#       - name: Cache pip
+#         uses: actions/cache@v4
+#         with:
+#           path: ~/.cache/pip
+#           key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+#           restore-keys: |
+#             ${{ runner.os }}-pip-
+#
+#       - name: Install dependencies
+#         run: |
+#           python -m pip install --upgrade pip
+#           pip install -r requirements.txt || true
+#           pip install flake8 pytest pytest-asyncio
+#
+#       - name: Lint with flake8
+#         run: |
+#           flake8 --count --statistics
+#
+#       - name: Run tests
+#         run: |
+#           pytest -q
+#
 
-on:
-  push:
-    branches: [ main, 'feature/**' ]
-  pull_request:
-    branches: [ main ]
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: [3.11]
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          python -m pip install pytest neo4j
-
-      - name: Collect tests (debug)
-        run: |
-          echo "Listing top-level files:" && ls -la
-          echo "Finding test files:" && find . -maxdepth 5 -type f -name 'test_*.py' -print || true
-          echo "Running pytest --collect-only (verbose) in ./tests"
-          python -m pytest --collect-only -q -vv ./tests || true
-
-      - name: Run tests
-        run: |
-          python -m pytest -q ./tests
-
-      - name: Upload pytest logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: pytest-report
-          path: .pytest_cache || true

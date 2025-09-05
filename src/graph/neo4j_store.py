@@ -7,11 +7,11 @@ Echte Neo4j-Integration mit APOC-Plugin-Support
 """
 
 import logging
-from typing import List, Dict, Any, Optional
-from neo4j import GraphDatabase
-import asyncio
 import json
 from datetime import datetime
+from typing import Any, Dict, List
+
+from neo4j import GraphDatabase
 
 logger = logging.getLogger(__name__)
 
@@ -21,10 +21,10 @@ class Neo4jGraphStore:
 
     def __init__(self, config: Dict[str, Any]):
         self.config = config
-        self.uri = config.get('uri', 'bolt://localhost:7687')
-        self.username = config.get('username', 'neo4j')
-        self.password = config.get('password', 'neo4j123')
-        self.database = config.get('database', 'neo4j')
+        self.uri = config.get("uri", "bolt://localhost:7687")
+        self.username = config.get("username", "neo4j")
+        self.password = config.get("password", "neo4j123")
+        self.database = config.get("database", "neo4j")
 
         self.driver = None
         self._initialize_driver()
@@ -35,12 +35,46 @@ class Neo4jGraphStore:
             self.driver = GraphDatabase.driver(
                 self.uri,
                 auth=(self.username, self.password),
-                encrypted=False  # Für lokale Entwicklung
+                encrypted=False,  # Für lokale Entwicklung
             )
             logger.info(f"Neo4j Driver initialisiert: {self.uri}")
         except Exception as e:
             logger.error(f"Fehler beim Initialisieren des Neo4j Drivers: {e}")
             self.driver = None
+
+    def _sanitize_value(self, v: Any) -> Any:
+        """Konvertiert komplexe Werte (dict/list/objekte) zu JSON-Strings, lässt Primitive unverändert."""
+        if v is None:
+            return None
+        if isinstance(v, (str, int, float, bool)):
+            return v
+        if isinstance(v, list):
+            # Liste mit nur primitiven Werten lässt sich direkt verwenden
+            if all(isinstance(x, (str, int, float, bool)) for x in v):
+                return v
+            try:
+                return json.dumps(v, ensure_ascii=False, default=str)
+            except Exception:
+                return str(v)
+        if isinstance(v, dict):
+            try:
+                return json.dumps(v, ensure_ascii=False, default=str)
+            except Exception:
+                return str(v)
+        # Fallback: stringrepr
+        try:
+            return str(v)
+        except Exception:
+            return json.dumps(v, ensure_ascii=False, default=str)
+
+    def _sanitize_properties_in_dict(self, d: Dict[str, Any]) -> Dict[str, Any]:
+        """Wendet _sanitize_value rekursiv auf die Werte eines Dicts an und entfernt None-Werte."""
+        out: Dict[str, Any] = {}
+        for k, v in (d or {}).items():
+            if v is None:
+                continue
+            out[k] = self._sanitize_value(v)
+        return out
 
     async def add_entities(self, entities: List[Dict[str, Any]]) -> None:
         """Fügt Entitäten zur Graph-Datenbank hinzu - Updated für Real Data"""
@@ -48,7 +82,8 @@ class Neo4jGraphStore:
             logger.warning("Neo4j Driver nicht verfügbar")
             return
 
-        # Updated query für echte Daten mit MERGE statt CREATE um Duplikate zu vermeiden
+        # Updated query für echte Daten mit MERGE statt CREATE um Duplikate zu
+        # vermeiden
         query = """
         UNWIND $entities AS entity
         MERGE (e:Entity {name: entity.name})
@@ -62,14 +97,18 @@ class Neo4jGraphStore:
         """
 
         try:
+            # sanitize entities to avoid nested Maps as Neo4j properties
+            sanitized = [self._sanitize_properties_in_dict(e) for e in entities]
             with self.driver.session(database=self.database) as session:
-                result = session.run(query, entities=entities)
+                result = session.run(query, entities=sanitized)
                 created = [record.data() for record in result]
                 logger.info(f"Entitäten hinzugefügt/aktualisiert: {len(created)}")
 
                 # Log entity details für Real Data Validation
                 for entity_info in created:
-                    logger.debug(f"Entity processed: {entity_info['name']} ({entity_info['type']})")
+                    logger.debug(
+                        f"Entity processed: {entity_info['name']} ({entity_info['type']})"
+                    )
 
                 return len(created)
         except Exception as e:
@@ -97,45 +136,56 @@ class Neo4jGraphStore:
         """
 
         try:
+            sanitized_rels = [self._sanitize_properties_in_dict(r) for r in relationships]
             with self.driver.session(database=self.database) as session:
-                result = session.run(query, relationships=relationships)
+                result = session.run(query, relationships=sanitized_rels)
                 created = [record.data() for record in result]
                 logger.info(f"Beziehungen hinzugefügt/aktualisiert: {len(created)}")
 
                 # Log relationship details für Real Data Validation
                 for rel_info in created:
-                    logger.debug(f"Relationship: {rel_info['source_name']} -[{rel_info['relationship_type']}]-> {rel_info['target_name']}")
+                    logger.debug(
+                        f"Relationship: {rel_info['source_name']} -[{rel_info['relationship_type']}]-> {rel_info['target_name']}"
+                    )
 
                 return len(created)
         except Exception as e:
             logger.error(f"Fehler beim Hinzufügen von Beziehungen: {e}")
             raise
 
-    async def query_graph_with_validation(self, query: str, parameters: Dict[str, Any]) -> List[Dict[str, Any]]:
+    async def query_graph_with_validation(
+        self, query: str, parameters: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
         """Graph Query mit Real Data Validation"""
         if not self.driver:
             logger.warning("Neo4j Driver nicht verfügbar - verwende Mock-Daten")
             return self._mock_query_results(query, parameters)
 
         try:
+            params = self._sanitize_properties_in_dict(parameters or {})
             with self.driver.session(database=self.database) as session:
-                result = session.run(query, parameters)
+                result = session.run(query, params)
                 records = []
 
                 for record in result:
                     record_dict = dict(record)
                     # Konvertiere Neo4j-Objekte zu Python-Dicts
                     converted_record = self._convert_neo4j_types(record_dict)
+                    # Stelle sicher, dass wir ein Dict haben bevor wir _validation hinzufügen
+                    if not isinstance(converted_record, dict):
+                        converted_record = {"_value": converted_record}
 
                     # Add validation metadata für Real Data Tracking
-                    converted_record['_validation'] = {
-                        'source': 'neo4j_real_data',
-                        'query_timestamp': datetime.now().isoformat(),
-                        'record_type': 'validated_real_data'
+                    converted_record["_validation"] = {
+                        "source": "neo4j_real_data",
+                        "query_timestamp": datetime.now().isoformat(),
+                        "record_type": "validated_real_data",
                     }
                     records.append(converted_record)
 
-                logger.info(f"Real Graph Query ergab {len(records)} validierte Ergebnisse")
+                logger.info(
+                    f"Real Graph Query ergab {len(records)} validierte Ergebnisse"
+                )
                 return records
 
         except Exception as e:
@@ -151,27 +201,33 @@ class Neo4jGraphStore:
         try:
             with self.driver.session(database=self.database) as session:
                 # Entity counts by type
-                result = session.run("""
+                result = session.run(
+                    """
                     MATCH (e:Entity)
                     RETURN e.type as entity_type, count(e) as count
                     ORDER BY count DESC
-                """)
+                """
+                )
                 entity_stats = [record.data() for record in result]
 
                 # Relationship counts by type
-                result = session.run("""
+                result = session.run(
+                    """
                     MATCH ()-[r:RELATES]->()
                     RETURN r.type as relationship_type, count(r) as count
                     ORDER BY count DESC
-                """)
+                """
+                )
                 relationship_stats = [record.data() for record in result]
 
                 # Total counts
-                result = session.run("""
-                    MATCH (e:Entity) 
+                result = session.run(
+                    """
+                    MATCH (e:Entity)
                     OPTIONAL MATCH ()-[r:RELATES]->()
                     RETURN count(DISTINCT e) as total_entities, count(r) as total_relationships
-                """)
+                """
+                )
                 totals = result.single()
 
                 return {
@@ -180,22 +236,25 @@ class Neo4jGraphStore:
                     "entity_types": entity_stats,
                     "relationship_types": relationship_stats,
                     "data_source": "real_neo4j_data",
-                    "timestamp": datetime.now().isoformat()
+                    "timestamp": datetime.now().isoformat(),
                 }
 
         except Exception as e:
             logger.error(f"Statistik-Abfrage fehlgeschlagen: {e}")
             return {"error": str(e)}
 
-    async def query_graph(self, query: str, parameters: Dict[str, Any]) -> List[Dict[str, Any]]:
+    async def query_graph(
+        self, query: str, parameters: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
         """Führt eine Cypher-Query aus"""
         if not self.driver:
             logger.warning("Neo4j Driver nicht verfügbar - verwende Mock-Daten")
             return self._mock_query_results(query, parameters)
 
         try:
+            params = self._sanitize_properties_in_dict(parameters or {})
             with self.driver.session(database=self.database) as session:
-                result = session.run(query, parameters)
+                result = session.run(query, params)
                 records = []
                 for record in result:
                     record_dict = dict(record)
@@ -217,32 +276,36 @@ class Neo4jGraphStore:
             return [self._convert_neo4j_types(item) for item in data]
         else:
             # Konvertiere Neo4j Node/Relationship Objekte
-            if hasattr(data, '_properties'):
+            if hasattr(data, "_properties"):
                 return dict(data._properties)
             return data
 
-    def _mock_query_results(self, query: str, parameters: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _mock_query_results(
+        self, query: str, parameters: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
         """Fallback Mock-Ergebnisse wenn Neo4j nicht verfügbar"""
-        entities = parameters.get('entities', [])
+        parameters.get("entities", [])
         mock_results = []
 
-        if any(term in query.lower() for term in ['machine', 'learning', 'ai']):
+        if any(term in query.lower() for term in ["machine", "learning", "ai"]):
             mock_results = [
                 {
-                    'id': 'ml_1',
-                    'content': 'Machine learning is a subset of AI that enables computers to learn from data',
-                    'relevance_score': 0.9
+                    "id": "ml_1",
+                    "content": "Machine learning is a subset of AI that enables computers to learn from data",
+                    "relevance_score": 0.9,
                 },
                 {
-                    'id': 'ai_1',
-                    'content': 'Artificial intelligence is intelligence demonstrated by machines',
-                    'relevance_score': 0.8
-                }
+                    "id": "ai_1",
+                    "content": "Artificial intelligence is intelligence demonstrated by machines",
+                    "relevance_score": 0.8,
+                },
             ]
 
         return mock_results
 
-    async def search_entities_by_content(self, search_terms: List[str], k: int = 5) -> List[Dict[str, Any]]:
+    async def search_entities_by_content(
+        self, search_terms: List[str], k: int = 5
+    ) -> List[Dict[str, Any]]:
         """Sucht Entitäten basierend auf Inhalt"""
         if not search_terms:
             return []
@@ -251,7 +314,7 @@ class Neo4jGraphStore:
         query = """
         MATCH (e:Entity)
         WHERE ANY(term IN $terms WHERE e.content CONTAINS term OR e.name CONTAINS term)
-        WITH e, 
+        WITH e,
              SIZE([term IN $terms WHERE e.content CONTAINS term OR e.name CONTAINS term]) as matches
         RETURN e.name as name,
                e.content as content,
@@ -261,10 +324,12 @@ class Neo4jGraphStore:
         LIMIT $k
         """
 
-        parameters = {'terms': search_terms, 'k': k}
+        parameters = {"terms": search_terms, "k": k}
         return await self.query_graph(query, parameters)
 
-    async def get_related_entities(self, entity_name: str, max_hops: int = 2, k: int = 5) -> List[Dict[str, Any]]:
+    async def get_related_entities(
+        self, entity_name: str, max_hops: int = 2, k: int = 5
+    ) -> List[Dict[str, Any]]:
         """Findet verwandte Entitäten über Beziehungen"""
         query = f"""
         MATCH path = (start:Entity {{name: $entity_name}})-[*1..{max_hops}]-(related:Entity)
@@ -280,7 +345,7 @@ class Neo4jGraphStore:
         LIMIT $k
         """
 
-        parameters = {'entity_name': entity_name, 'k': k}
+        parameters = {"entity_name": entity_name, "k": k}
         return await self.query_graph(query, parameters)
 
     def close(self):
@@ -302,9 +367,9 @@ class Neo4jGraphStoreFactory:
     def create_test_store() -> Neo4jGraphStore:
         """Erstellt Test-Instanz mit Standard-Konfiguration"""
         config = {
-            'uri': 'bolt://localhost:7687',
-            'username': 'neo4j',
-            'password': 'neo4j123',
-            'database': 'neo4j'
+            "uri": "bolt://localhost:7687",
+            "username": "neo4j",
+            "password": "neo4j123",
+            "database": "neo4j",
         }
         return Neo4jGraphStore(config)

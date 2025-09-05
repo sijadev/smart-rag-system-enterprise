@@ -1,0 +1,150 @@
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from fastapi.responses import HTMLResponse
+import json
+import asyncio
+from typing import List
+import uuid
+from datetime import datetime
+
+app = FastAPI(title="Claude-like Chat UI")
+
+# Templates und statische Dateien
+templates = Jinja2Templates(directory="templates")
+
+# In-Memory Storage für Chat-Sessions (in Produktion würde man eine Datenbank verwenden)
+chat_sessions = {}
+active_connections: List[WebSocket] = []
+
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+
+    async def send_message(self, message: str, websocket: WebSocket):
+        await websocket.send_text(message)
+
+manager = ConnectionManager()
+
+@app.get("/", response_class=HTMLResponse)
+async def get_chat_page(request: Request):
+    return templates.TemplateResponse("chat.html", {"request": request})
+
+@app.get("/new", response_class=HTMLResponse)
+async def new_chat(request: Request):
+    session_id = str(uuid.uuid4())
+    chat_sessions[session_id] = {
+        "messages": [],
+        "created_at": datetime.now(),
+        "title": "New Chat"
+    }
+    return templates.TemplateResponse("chat.html", {
+        "request": request,
+        "session_id": session_id
+    })
+
+@app.get("/api/sessions")
+async def get_sessions():
+    return {"sessions": [
+        {
+            "id": session_id,
+            "title": session_data["title"],
+            "created_at": session_data["created_at"].isoformat(),
+            "message_count": len(session_data["messages"])
+        }
+        for session_id, session_data in chat_sessions.items()
+    ]}
+
+@app.get("/api/sessions/{session_id}")
+async def get_session(session_id: str):
+    if session_id not in chat_sessions:
+        return {"error": "Session not found"}, 404
+    return chat_sessions[session_id]
+
+@app.websocket("/ws/{session_id}")
+async def websocket_endpoint(websocket: WebSocket, session_id: str):
+    await manager.connect(websocket)
+
+    # Session erstellen falls sie nicht existiert
+    if session_id not in chat_sessions:
+        chat_sessions[session_id] = {
+            "messages": [],
+            "created_at": datetime.now(),
+            "title": "New Chat"
+        }
+
+    try:
+        while True:
+            # Nachricht vom Client empfangen
+            data = await websocket.receive_text()
+            message_data = json.loads(data)
+
+            user_message = {
+                "role": "user",
+                "content": message_data["content"],
+                "timestamp": datetime.now().isoformat()
+            }
+
+            # Nachricht zur Session hinzufügen
+            chat_sessions[session_id]["messages"].append(user_message)
+
+            # Titel aktualisieren wenn es die erste Nachricht ist
+            if len(chat_sessions[session_id]["messages"]) == 1:
+                title = message_data["content"][:50] + "..." if len(message_data["content"]) > 50 else message_data["content"]
+                chat_sessions[session_id]["title"] = title
+
+            # Benutzer-Nachricht zurücksenden
+            await manager.send_message(json.dumps({
+                "type": "user_message",
+                "message": user_message
+            }), websocket)
+
+            # KI-Antwort simulieren (hier würdest du deine KI-Logik integrieren)
+            await asyncio.sleep(1)  # Simuliere Verarbeitungszeit
+
+            # Simulierte KI-Antwort
+            ai_response = await generate_ai_response(message_data["content"])
+
+            ai_message = {
+                "role": "assistant",
+                "content": ai_response,
+                "timestamp": datetime.now().isoformat()
+            }
+
+            chat_sessions[session_id]["messages"].append(ai_message)
+
+            # KI-Antwort zurücksenden
+            await manager.send_message(json.dumps({
+                "type": "ai_message",
+                "message": ai_message
+            }), websocket)
+
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+
+async def generate_ai_response(user_input: str) -> str:
+    """
+    Hier würdest du deine KI-Logik implementieren.
+    Das könnte ein Aufruf an OpenAI, Claude API, oder ein lokales Modell sein.
+    """
+    responses = [
+        f"Das ist eine interessante Frage zu: '{user_input}'. Lass mich darüber nachdenken...",
+        f"Basierend auf deiner Eingabe '{user_input}', kann ich dir folgendes sagen...",
+        f"Das ist eine großartige Frage! Zu '{user_input}' fällt mir ein...",
+        f"Danke für deine Nachricht über '{user_input}'. Hier ist meine Antwort..."
+    ]
+
+    import random
+    return random.choice(responses) + " (Dies ist eine Beispielantwort - hier würdest du deine echte KI-Integration hinzufügen.)"
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

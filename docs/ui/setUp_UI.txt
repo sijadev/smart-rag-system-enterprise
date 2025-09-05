@@ -1,0 +1,59 @@
+#!/bin/bash
+
+# Claude-like Chat UI Setup Script
+echo "🚀 Setting up Claude-like Chat UI..."
+
+# Erstelle Projektverzeichnis
+mkdir -p claude-chat-ui
+cd claude-chat-ui
+
+# Erstelle Unterverzeichnisse
+mkdir -p templates
+mkdir -p static/css
+mkdir -p static/js
+
+echo "📁 Created project structure"
+
+# Erstelle Virtual Environment
+python3 -m venv venv
+echo "🐍 Created virtual environment"
+
+# Aktiviere Virtual Environment
+if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" ]]; then
+    source venv/Scripts/activate
+else
+    source venv/bin/activate
+fi
+
+echo "✅ Activated virtual environment"
+
+# Erstelle requirements.txt
+cat > requirements.txt << EOF
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+websockets==12.0
+jinja2==3.1.2
+python-multipart==0.0.6
+python-json-logger==2.0.7
+EOF
+
+# Installiere Dependencies
+pip install -r requirements.txt
+echo "📦 Installed dependencies"
+
+echo ""
+echo "✅ Setup complete!"
+echo ""
+echo "Next steps:"
+echo "1. Copy the main.py file into the claude-chat-ui directory"
+echo "2. Copy the chat.html file into the templates/ directory"
+echo "3. Run the application:"
+echo "   cd claude-chat-ui"
+if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" ]]; then
+    echo "   venv\\Scripts\\activate"
+else
+    echo "   source venv/bin/activate"
+fi
+echo "   python main.py"
+echo ""
+echo "🌐 Then open http://localhost:8000 in your browser"

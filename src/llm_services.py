@@ -10,12 +10,13 @@ Nutzt zentrale Konfiguration mit Dependency Injection
 import asyncio
 import json
 import logging
-from typing import List, Dict, Any, Optional
-import httpx
 from dataclasses import dataclass
+from typing import Any, Dict, List, Optional
 
+import httpx
+
+from src.central_config import OllamaConfig, get_config
 from src.interfaces import ILLMService, QueryContext
-from src.central_config import get_config, inject, OllamaConfig
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class OllamaServiceConfig:
     """Legacy-Wrapper für OllamaConfig"""
+
     base_url: str
     model: str
     embedding_model: str
@@ -47,13 +49,12 @@ class OllamaLLMService(ILLMService):
                 timeout=central_config.ollama.timeout,
                 max_retries=central_config.ollama.max_retries,
                 temperature=central_config.ollama.temperature,
-                max_tokens=central_config.ollama.max_tokens
+                max_tokens=central_config.ollama.max_tokens,
             )
 
         self.config = config
         self.client = httpx.AsyncClient(
-            base_url=config.base_url,
-            timeout=httpx.Timeout(config.timeout)
+            base_url=config.base_url, timeout=httpx.Timeout(config.timeout)
         )
         self._available_models: Optional[List[str]] = None
 
@@ -77,11 +78,15 @@ class OllamaLLMService(ILLMService):
 
             # Stelle sicher, dass das gewünschte Modell verfügbar ist
             if self.config.model not in self._available_models:
-                logger.warning(f"Model '{self.config.model}' nicht verfügbar. Versuche zu pullen...")
+                logger.warning(
+                    f"Model '{self.config.model}' nicht verfügbar. Versuche zu pullen..."
+                )
                 await self._pull_model(self.config.model)
 
             if self.config.embedding_model not in self._available_models:
-                logger.warning(f"Embedding model '{self.config.embedding_model}' nicht verfügbar. Versuche zu pullen...")
+                logger.warning(
+                    f"Embedding model '{self.config.embedding_model}' nicht verfügbar. Versuche zu pullen..."
+                )
                 await self._pull_model(self.config.embedding_model)
 
             logger.info(f"Ollama Service initialisiert mit Model: {self.config.model}")
@@ -90,7 +95,9 @@ class OllamaLLMService(ILLMService):
             logger.error(f"Fehler bei Ollama-Initialisierung: {e}")
             raise
 
-    async def generate(self, prompt: str, context: Optional[QueryContext] = None) -> str:
+    async def generate(
+        self, prompt: str, context: Optional[QueryContext] = None
+    ) -> str:
         """Generiert Antwort basierend auf Prompt"""
         try:
             # Erstelle Ollama-Request
@@ -101,8 +108,8 @@ class OllamaLLMService(ILLMService):
                 "options": {
                     "temperature": self.config.temperature,
                     "top_p": self.config.top_p,
-                    "num_predict": self.config.max_tokens
-                }
+                    "num_predict": self.config.max_tokens,
+                },
             }
 
             # Füge Kontext hinzu falls vorhanden
@@ -116,8 +123,7 @@ class OllamaLLMService(ILLMService):
             for attempt in range(self.config.max_retries):
                 try:
                     response = await self.client.post(
-                        "/api/generate",
-                        json=request_data
+                        "/api/generate", json=request_data
                     )
                     response.raise_for_status()
 
@@ -134,13 +140,15 @@ class OllamaLLMService(ILLMService):
                     if attempt == self.config.max_retries - 1:
                         raise
                     logger.warning(f"HTTP Fehler (Versuch {attempt + 1}): {e}")
-                    await asyncio.sleep(2 ** attempt)
+                    await asyncio.sleep(2**attempt)
 
                 except Exception as e:
                     if attempt == self.config.max_retries - 1:
                         raise
-                    logger.warning(f"Fehler bei Ollama-Anfrage (Versuch {attempt + 1}): {e}")
-                    await asyncio.sleep(2 ** attempt)
+                    logger.warning(
+                        f"Fehler bei Ollama-Anfrage (Versuch {attempt + 1}): {e}"
+                    )
+                    await asyncio.sleep(2**attempt)
 
         except Exception as e:
             logger.error(f"Fehler bei Text-Generierung mit Ollama: {e}")
@@ -149,18 +157,16 @@ class OllamaLLMService(ILLMService):
     async def embed(self, text: str) -> List[float]:
         """Erstellt Text-Embeddings mit Ollama"""
         try:
-            request_data = {
-                "model": self.config.embedding_model,
-                "prompt": text
-            }
+            request_data = {"model": self.config.embedding_model, "prompt": text}
 
-            logger.debug(f"Erstelle Embeddings mit Ollama: {self.config.embedding_model}")
+            logger.debug(
+                f"Erstelle Embeddings mit Ollama: {self.config.embedding_model}"
+            )
 
             for attempt in range(self.config.max_retries):
                 try:
                     response = await self.client.post(
-                        "/api/embeddings",
-                        json=request_data
+                        "/api/embeddings", json=request_data
                     )
                     response.raise_for_status()
 
@@ -168,22 +174,30 @@ class OllamaLLMService(ILLMService):
                     embeddings = result.get("embedding", [])
 
                     if embeddings and isinstance(embeddings, list):
-                        logger.debug(f"Embeddings erstellt: {len(embeddings)} Dimensionen")
+                        logger.debug(
+                            f"Embeddings erstellt: {len(embeddings)} Dimensionen"
+                        )
                         return embeddings
                     else:
-                        raise ValueError("Keine gültigen Embeddings von Ollama erhalten")
+                        raise ValueError(
+                            "Keine gültigen Embeddings von Ollama erhalten"
+                        )
 
                 except httpx.HTTPStatusError as e:
                     if attempt == self.config.max_retries - 1:
                         raise
-                    logger.warning(f"HTTP Fehler beim Embedding (Versuch {attempt + 1}): {e}")
-                    await asyncio.sleep(2 ** attempt)
+                    logger.warning(
+                        f"HTTP Fehler beim Embedding (Versuch {attempt + 1}): {e}"
+                    )
+                    await asyncio.sleep(2**attempt)
 
                 except Exception as e:
                     if attempt == self.config.max_retries - 1:
                         raise
-                    logger.warning(f"Fehler beim Embedding (Versuch {attempt + 1}): {e}")
-                    await asyncio.sleep(2 ** attempt)
+                    logger.warning(
+                        f"Fehler beim Embedding (Versuch {attempt + 1}): {e}"
+                    )
+                    await asyncio.sleep(2**attempt)
 
         except Exception as e:
             logger.error(f"Fehler bei Embedding-Erstellung mit Ollama: {e}")
@@ -200,8 +214,8 @@ class OllamaLLMService(ILLMService):
             "config": {
                 "temperature": self.config.temperature,
                 "top_p": self.config.top_p,
-                "max_tokens": self.config.max_tokens
-            }
+                "max_tokens": self.config.max_tokens,
+            },
         }
 
     async def _check_connection(self):
@@ -212,7 +226,9 @@ class OllamaLLMService(ILLMService):
             logger.info("Verbindung zu Ollama erfolgreich")
         except Exception as e:
             logger.error(f"Keine Verbindung zu Ollama möglich: {e}")
-            raise ConnectionError(f"Ollama nicht erreichbar unter {self.config.base_url}: {e}")
+            raise ConnectionError(
+                f"Ollama nicht erreichbar unter {self.config.base_url}: {e}"
+            )
 
     async def _get_available_models(self) -> List[str]:
         """Lädt verfügbare Modelle von Ollama"""
@@ -221,8 +237,11 @@ class OllamaLLMService(ILLMService):
             response.raise_for_status()
 
             data = response.json()
-            models = [model.get("name", "").split(":")[0] for model in data.get("models", [])]
-            models = list(set(filter(None, models)))  # Entferne Duplikate und leere Namen
+            models = [
+                model.get("name", "").split(":")[0] for model in data.get("models", [])
+            ]
+            # Entferne Duplikate und leere Namen
+            models = list(set(filter(None, models)))
 
             logger.info(f"Verfügbare Ollama Modelle: {models}")
             return models
@@ -239,9 +258,7 @@ class OllamaLLMService(ILLMService):
             request_data = {"name": model_name}
 
             async with self.client.stream(
-                "POST",
-                "/api/pull",
-                json=request_data
+                "POST", "/api/pull", json=request_data
             ) as response:
                 response.raise_for_status()
 
@@ -264,10 +281,7 @@ class OllamaLLMService(ILLMService):
         """Gibt Informationen zu einem spezifischen Modell zurück"""
         model = model_name or self.config.model
         try:
-            response = await self.client.post(
-                "/api/show",
-                json={"name": model}
-            )
+            response = await self.client.post("/api/show", json={"name": model})
             response.raise_for_status()
 
             return response.json()
@@ -290,7 +304,7 @@ class OllamaLLMService(ILLMService):
             return []
 
     @classmethod
-    def create_from_central_config(cls, config: OllamaConfig) -> 'OllamaLLMService':
+    def create_from_central_config(cls, config: OllamaConfig) -> "OllamaLLMService":
         """Erstellt Service aus zentraler Konfiguration mit DI"""
         service_config = OllamaServiceConfig(
             base_url=config.base_url,
@@ -299,7 +313,7 @@ class OllamaLLMService(ILLMService):
             timeout=config.timeout,
             max_retries=config.max_retries,
             temperature=config.temperature,
-            max_tokens=config.max_tokens
+            max_tokens=config.max_tokens,
         )
 
         return cls(service_config)
@@ -309,7 +323,9 @@ class OllamaServiceFactory:
     """Factory für OllamaLLMService Instanzen"""
 
     @staticmethod
-    def create_service(config: Optional[OllamaServiceConfig] = None) -> OllamaLLMService:
+    def create_service(
+        config: Optional[OllamaServiceConfig] = None,
+    ) -> OllamaLLMService:
         """Erstellt OllamaLLMService Instanz"""
         return OllamaLLMService(config)
 
@@ -331,7 +347,9 @@ class MockLLMService(ILLMService):
     def __init__(self):
         self.call_count = 0
 
-    async def generate(self, prompt: str, context: Optional[QueryContext] = None) -> str:
+    async def generate(
+        self, prompt: str, context: Optional[QueryContext] = None
+    ) -> str:
         """Mock-Implementierung für generate"""
         self.call_count += 1
         return f"Mock response {self.call_count} for prompt: {prompt[:50]}..."
@@ -340,6 +358,7 @@ class MockLLMService(ILLMService):
         """Mock-Implementierung für embed"""
         # Erstelle deterministische Mock-Embeddings basierend auf Text
         import hashlib
+
         text_hash = hashlib.md5(text.encode()).hexdigest()
         # Konvertiere zu 384-dimensionalem Vektor (Standard für viele Modelle)
         mock_embedding = []
@@ -354,6 +373,5 @@ class MockLLMService(ILLMService):
         return {
             "provider": "mock",
             "model": "mock-model",
-            "call_count": self.call_count
+            "call_count": self.call_count,
         }
-

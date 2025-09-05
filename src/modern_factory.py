@@ -6,11 +6,11 @@ Modernisierte Factory mit zentraler Konfiguration
 Factory Pattern mit Dependency Injection für das Smart RAG System
 """
 
-from typing import Dict, Any, Optional, Type
-from src.interfaces import ILLMService
-from src.central_config import get_container, OllamaConfig, CentralConfig
-from src.llm_services import OllamaLLMService
 import logging
+
+from src.central_config import OllamaConfig, get_container
+from src.interfaces import ILLMService
+from src.llm_services import OllamaLLMService
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +43,7 @@ class ModernLLMServiceFactory:
 
         # Erstelle neue Konfiguration mit Überschreibungen
         from dataclasses import replace
+
         modified_config = replace(base_config, **overrides)
 
         return ModernLLMServiceFactory.create_ollama_service(modified_config)

@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   neo4j:
     image: neo4j:5.15.0
@@ -53,6 +51,27 @@ services:
       retries: 5
       start_period: 30s
 
+  # --- Qdrant Service hinzugefügt ---
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: smart_rag_qdrant
+    restart: unless-stopped
+    ports:
+      - "${QDRANT_HOST_PORT:-6333}:6333"    # Host port kann via QDRANT_HOST_PORT überschrieben werden
+    environment:
+      # konservative defaults; Pfad wird durch Volume gemounted
+      - QDRANT__SERVICE__HTTP_PORT=6333
+      - QDRANT__STORAGE__STORAGE_PATH=/qdrant/storage
+      - QDRANT__LOG__LEVEL=info
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail http://localhost:6333/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
 volumes:
   neo4j_data:
     driver: local
@@ -61,6 +80,8 @@ volumes:
   neo4j_import:
     driver: local
   neo4j_plugins:
+    driver: local
+  qdrant_storage:
     driver: local
 
 networks:

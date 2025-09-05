@@ -9,9 +9,10 @@ Bietet einen einfachen, asynchronen Embedding-Wrapper, der:
 
 Die Klasse ist bewusst leichtgewichtig und non-invasiv implementiert.
 """
-from typing import List, Dict, Any, Optional
+
 import asyncio
 import math
+from typing import Dict, List, Optional
 
 from ..interfaces import ILLMService
 
@@ -35,7 +36,9 @@ class EmbeddingPipeline:
             return vec
         return [x / norm for x in vec]
 
-    async def embed_texts(self, texts: List[str], batch_size: int = 16, normalize: bool = False) -> List[List[float]]:
+    async def embed_texts(
+        self, texts: List[str], batch_size: int = 16, normalize: bool = False
+    ) -> List[List[float]]:
         """Return embeddings for the given texts.
 
         - Uses in-memory cache to avoid duplicate requests.
@@ -48,39 +51,42 @@ class EmbeddingPipeline:
         # result list
         embeddings: List[Optional[List[float]]] = [None] * len(texts)
 
-        # map indices of texts that are uncached
-        uncached_batches: List[List[int]] = []
-        current_batch: List[int] = []
-
+        # Build mapping of text -> list of indices that need embedding
+        text_to_indices: Dict[str, List[int]] = {}
         for idx, txt in enumerate(texts):
             if txt in self._cache:
                 embeddings[idx] = self._cache[txt]
             else:
-                current_batch.append(idx)
-                if len(current_batch) >= batch_size:
-                    uncached_batches.append(current_batch)
-                    current_batch = []
-        if current_batch:
-            uncached_batches.append(current_batch)
+                text_to_indices.setdefault(txt, []).append(idx)
 
-        # For each batch, call the llm_service concurrently per item (provider usually handles batching itself)
-        for batch in uncached_batches:
-            coros = [self.llm_service.embed(texts[i]) for i in batch]
-            # gather with return_exceptions=False to propagate exceptions
+        # If nothing to embed, return cached results
+        if not text_to_indices:
+            return [emb if emb is not None else [] for emb in embeddings]
+
+        # Process unique texts in batches to avoid duplicate embedding calls
+        unique_texts = list(text_to_indices.keys())
+        for start in range(0, len(unique_texts), batch_size):
+            batch_texts = unique_texts[start: start + batch_size]
+            coros = [self.llm_service.embed(t) for t in batch_texts]
             results = await asyncio.gather(*coros)
-            for i, vec in zip(batch, results):
-                # ensure list(float)
+
+            for txt, vec in zip(batch_texts, results):
                 if vec is None:
-                    raise RuntimeError(f"LLM service returned no embedding for text at index {i}")
+                    raise RuntimeError(
+                        f"LLM service returned no embedding for text: {txt}"
+                    )
                 if not isinstance(vec, list):
                     vec = list(vec)
                 if normalize:
                     vec = self._normalize(vec)
-                self._cache[texts[i]] = vec
-                embeddings[i] = vec
 
-        # At this point all embeddings should be filled
-        # Convert Optional[List[float]] -> List[List[float]]
+                # cache once and fill all corresponding indices
+                self._cache[txt] = vec
+                for idx in text_to_indices.get(txt, []):
+                    embeddings[idx] = vec
+
+        # Convert Optional[List[float]] -> List[List[float]]; missing entries
+        # become empty lists
         return [emb if emb is not None else [] for emb in embeddings]
 
     async def embed_text(self, text: str, normalize: bool = False) -> List[float]:
@@ -94,4 +100,3 @@ class EmbeddingPipeline:
 
 
 __all__ = ["EmbeddingPipeline"]
-

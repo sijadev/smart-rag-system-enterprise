@@ -10,18 +10,17 @@ Implementiert Graph Data Science (GDS) Ersatz-Funktionen für das RAG-System:
 """
 
 import asyncio
-from typing import List, Dict, Any, Tuple, Optional
 from dataclasses import dataclass
-import numpy as np
-from collections import defaultdict, Counter
+from typing import Any, Dict, List
+
 import networkx as nx
-from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.cluster import DBSCAN
-import re
+import numpy as np
+
 
 @dataclass
 class NodeImportance:
     """Node Importance Score (PageRank Ersatz)"""
+
     node_id: str
     node_name: str
     node_type: str
@@ -29,14 +28,17 @@ class NodeImportance:
     connections: int
     centrality: float
 
+
 @dataclass
 class ConceptCluster:
     """Concept Cluster (Community Detection Ersatz)"""
+
     cluster_id: int
     concepts: List[str]
     cluster_size: int
     centrality_score: float
     theme: str
+
 
 class GraphAnalyticsWorkaround:
     """
@@ -47,7 +49,9 @@ class GraphAnalyticsWorkaround:
         self.driver = neo4j_driver
         self.graph = nx.Graph()
 
-    async def calculate_node_importance(self, node_type: str = None) -> List[NodeImportance]:
+    async def calculate_node_importance(
+        self, node_type: str = None
+    ) -> List[NodeImportance]:
         """
         Ersetzt GDS PageRank durch eigene Node Importance Berechnung
         """
@@ -59,7 +63,7 @@ class GraphAnalyticsWorkaround:
         WHERE $node_type IS NULL OR $node_type IN labels(n)
         OPTIONAL MATCH (n)-[r]-(connected)
         WITH n, count(r) as connections, collect(connected) as neighbors
-        RETURN 
+        RETURN
             elementId(n) as node_id,
             coalesce(n.name, n.title, 'Unknown') as node_name,
             labels(n)[0] as node_type,
@@ -81,14 +85,16 @@ class GraphAnalyticsWorkaround:
                     # Berechne Importance Score (PageRank Ersatz)
                     importance = centrality * (1 + np.log(connections + 1))
 
-                    nodes.append(NodeImportance(
-                        node_id=str(record["node_id"]),
-                        node_name=record["node_name"],
-                        node_type=record["node_type"],
-                        importance_score=importance,
-                        connections=connections,
-                        centrality=centrality
-                    ))
+                    nodes.append(
+                        NodeImportance(
+                            node_id=str(record["node_id"]),
+                            node_name=record["node_name"],
+                            node_type=record["node_type"],
+                            importance_score=importance,
+                            connections=connections,
+                            centrality=centrality,
+                        )
+                    )
 
                 return sorted(nodes, key=lambda x: x.importance_score, reverse=True)
 
@@ -96,7 +102,9 @@ class GraphAnalyticsWorkaround:
             print(f"⚠️ Node importance calculation failed: {e}")
             return []
 
-    async def find_concept_clusters(self, min_cluster_size: int = 3) -> List[ConceptCluster]:
+    async def find_concept_clusters(
+        self, min_cluster_size: int = 3
+    ) -> List[ConceptCluster]:
         """
         Ersetzt GDS Community Detection durch eigenes Clustering
         """
@@ -106,7 +114,7 @@ class GraphAnalyticsWorkaround:
         # Hole alle Concept-Beziehungen
         query = """
         MATCH (c1:Concept)-[r:RELATED_TO|CONTAINS|REFERENCES]-(c2:Concept)
-        RETURN 
+        RETURN
             c1.name as concept1,
             c2.name as concept2,
             type(r) as relationship_type,
@@ -149,13 +157,15 @@ class GraphAnalyticsWorkaround:
                         # Bestimme Cluster-Theme
                         theme = self._determine_cluster_theme(community)
 
-                        clusters.append(ConceptCluster(
-                            cluster_id=i,
-                            concepts=list(community),
-                            cluster_size=len(community),
-                            centrality_score=centrality,
-                            theme=theme
-                        ))
+                        clusters.append(
+                            ConceptCluster(
+                                cluster_id=i,
+                                concepts=list(community),
+                                cluster_size=len(community),
+                                centrality_score=centrality,
+                                theme=theme,
+                            )
+                        )
 
                 return sorted(clusters, key=lambda x: x.cluster_size, reverse=True)
 
@@ -170,9 +180,10 @@ class GraphAnalyticsWorkaround:
         try:
             # Verwende NetworkX's community detection
             import networkx.algorithms.community as nx_comm
+
             communities = list(nx_comm.greedy_modularity_communities(graph))
             return [list(community) for community in communities]
-        except:
+        except BaseException:
             # Fallback: Connected Components
             return [list(component) for component in nx.connected_components(graph)]
 
@@ -182,20 +193,32 @@ class GraphAnalyticsWorkaround:
         """
         # Einfache Keyword-basierte Themenerkennung
         themes = {
-            'machine_learning': ['ml', 'machine', 'learning', 'ai', 'neural', 'algorithm'],
-            'energy': ['energy', 'solar', 'wind', 'renewable', 'power', 'electricity'],
-            'technology': ['tech', 'technology', 'system', 'software', 'computer'],
-            'business': ['business', 'enterprise', 'company', 'market', 'strategy']
+            "machine_learning": [
+                "ml",
+                "machine",
+                "learning",
+                "ai",
+                "neural",
+                "algorithm",
+            ],
+            "energy": ["energy", "solar", "wind", "renewable", "power", "electricity"],
+            "technology": ["tech", "technology", "system", "software", "computer"],
+            "business": ["business", "enterprise", "company", "market", "strategy"],
         }
 
-        concept_text = ' '.join(concepts).lower()
+        concept_text = " ".join(concepts).lower()
         theme_scores = {}
 
         for theme, keywords in themes.items():
             score = sum(1 for keyword in keywords if keyword in concept_text)
             theme_scores[theme] = score
 
-        return max(theme_scores.items(), key=lambda x: x[1])[0] if theme_scores else 'general'
+        return (
+            max(theme_scores.items(), key=lambda x: x[1])[0]
+            if theme_scores
+            else "general"
+        )
+
 
 class SimilarityAnalysisWorkaround:
     """
@@ -206,8 +229,9 @@ class SimilarityAnalysisWorkaround:
         self.vector_store = vector_store
         self.driver = neo4j_driver
 
-    async def find_similar_concepts(self, query: str, threshold: float = 0.8,
-                                   k: int = 10) -> List[Dict[str, Any]]:
+    async def find_similar_concepts(
+        self, query: str, threshold: float = 0.8, k: int = 10
+    ) -> List[Dict[str, Any]]:
         """
         Ersetzt GDS Node Similarity durch Ollama Embeddings + Graph-Beziehungen
         """
@@ -215,16 +239,18 @@ class SimilarityAnalysisWorkaround:
 
         try:
             # 1. Semantische Ähnlichkeit über Ollama/Vector Store
-            if hasattr(self.vector_store, 'similarity_search'):
+            if hasattr(self.vector_store, "similarity_search"):
                 vector_similar = await self.vector_store.similarity_search(query, k=k)
 
                 for doc in vector_similar:
-                    similar_results.append({
-                        'type': 'semantic',
-                        'content': doc.page_content[:200],
-                        'similarity': 0.9,  # Placeholder - echte Similarity aus Vector Store
-                        'source': 'ollama_embeddings'
-                    })
+                    similar_results.append(
+                        {
+                            "type": "semantic",
+                            "content": doc.page_content[:200],
+                            "similarity": 0.9,  # Placeholder - echte Similarity aus Vector Store
+                            "source": "ollama_embeddings",
+                        }
+                    )
 
             # 2. Graph-basierte Ähnlichkeit aus Neo4j
             if self.driver:
@@ -238,7 +264,9 @@ class SimilarityAnalysisWorkaround:
             print(f"⚠️ Similarity analysis failed: {e}")
             return []
 
-    async def _find_graph_similar_concepts(self, query: str, k: int) -> List[Dict[str, Any]]:
+    async def _find_graph_similar_concepts(
+        self, query: str, k: int
+    ) -> List[Dict[str, Any]]:
         """
         Graph-basierte Ähnlichkeitssuche in Neo4j
         """
@@ -247,7 +275,7 @@ class SimilarityAnalysisWorkaround:
         WHERE c.name CONTAINS $query OR c.description CONTAINS $query
         OPTIONAL MATCH (c)-[r:RELATED_TO]-(related:Concept)
         WITH c, count(r) as relationship_strength, collect(related.name) as related_concepts
-        RETURN 
+        RETURN
             c.name as concept_name,
             c.description as description,
             relationship_strength,
@@ -262,16 +290,20 @@ class SimilarityAnalysisWorkaround:
 
                 graph_results = []
                 for record in result:
-                    similarity = min(1.0, record["relationship_strength"] / 5.0)  # Normalisiere
+                    similarity = min(
+                        1.0, record["relationship_strength"] / 5.0
+                    )  # Normalisiere
 
-                    graph_results.append({
-                        'type': 'graph',
-                        'concept_name': record["concept_name"],
-                        'description': record["description"] or '',
-                        'similarity': similarity,
-                        'related_concepts': record["related_concepts"],
-                        'source': 'neo4j_graph'
-                    })
+                    graph_results.append(
+                        {
+                            "type": "graph",
+                            "concept_name": record["concept_name"],
+                            "description": record["description"] or "",
+                            "similarity": similarity,
+                            "related_concepts": record["related_concepts"],
+                            "source": "neo4j_graph",
+                        }
+                    )
 
                 return graph_results
 
@@ -279,22 +311,26 @@ class SimilarityAnalysisWorkaround:
             print(f"⚠️ Graph similarity search failed: {e}")
             return []
 
-    def _rank_similarity_results(self, results: List[Dict[str, Any]],
-                               threshold: float) -> List[Dict[str, Any]]:
+    def _rank_similarity_results(
+        self, results: List[Dict[str, Any]], threshold: float
+    ) -> List[Dict[str, Any]]:
         """
         Rankt und filtert Ähnlichkeitsergebnisse
         """
         # Filtere nach Threshold
-        filtered = [r for r in results if r.get('similarity', 0) >= threshold]
+        filtered = [r for r in results if r.get("similarity", 0) >= threshold]
 
         # Kombiniere Scores für hybrid ranking
         for result in filtered:
-            if result['type'] == 'semantic':
-                result['combined_score'] = result['similarity'] * 1.2  # Bevorzuge semantische
+            if result["type"] == "semantic":
+                result["combined_score"] = (
+                    result["similarity"] * 1.2
+                )  # Bevorzuge semantische
             else:
-                result['combined_score'] = result['similarity'] * 1.0
+                result["combined_score"] = result["similarity"] * 1.0
 
-        return sorted(filtered, key=lambda x: x['combined_score'], reverse=True)
+        return sorted(filtered, key=lambda x: x["combined_score"], reverse=True)
+
 
 class PerformanceOptimizationWorkaround:
     """
@@ -314,17 +350,14 @@ class PerformanceOptimizationWorkaround:
             # Concept-Indizes
             "CREATE INDEX concept_name_idx IF NOT EXISTS FOR (c:Concept) ON (c.name)",
             "CREATE INDEX concept_domain_idx IF NOT EXISTS FOR (c:Concept) ON (c.domain)",
-
             # Document-Indizes
             "CREATE INDEX document_name_idx IF NOT EXISTS FOR (d:Document) ON (d.name)",
             "CREATE INDEX document_created_idx IF NOT EXISTS FOR (d:Document) ON (d.created)",
-
             # Entity-Indizes
             "CREATE INDEX entity_name_idx IF NOT EXISTS FOR (e:Entity) ON (e.name)",
             "CREATE INDEX entity_type_idx IF NOT EXISTS FOR (e:Entity) ON (e.type)",
-
             # Composite-Indizes für häufige Queries
-            "CREATE INDEX concept_name_domain_idx IF NOT EXISTS FOR (c:Concept) ON (c.name, c.domain)"
+            "CREATE INDEX concept_name_domain_idx IF NOT EXISTS FOR (c:Concept) ON (c.name, c.domain)",
         ]
 
         try:
@@ -357,13 +390,15 @@ class PerformanceOptimizationWorkaround:
                 profile_result = session.run(f"PROFILE {query}")
 
                 return {
-                    'query_plan': [dict(record) for record in explain_result],
-                    'performance_stats': [dict(record) for record in profile_result],
-                    'optimization_suggestions': self._get_optimization_suggestions(query)
+                    "query_plan": [dict(record) for record in explain_result],
+                    "performance_stats": [dict(record) for record in profile_result],
+                    "optimization_suggestions": self._get_optimization_suggestions(
+                        query
+                    ),
                 }
 
         except Exception as e:
-            return {'error': str(e)}
+            return {"error": str(e)}
 
     def _get_optimization_suggestions(self, query: str) -> List[str]:
         """
@@ -371,13 +406,13 @@ class PerformanceOptimizationWorkaround:
         """
         suggestions = []
 
-        if 'MATCH' in query and 'WHERE' not in query:
+        if "MATCH" in query and "WHERE" not in query:
             suggestions.append("Consider adding WHERE clause to filter results early")
 
-        if 'ORDER BY' in query and 'LIMIT' not in query:
+        if "ORDER BY" in query and "LIMIT" not in query:
             suggestions.append("Consider adding LIMIT to prevent large result sets")
 
-        if query.count('MATCH') > 3:
+        if query.count("MATCH") > 3:
             suggestions.append("Complex query - consider breaking into smaller parts")
 
         return suggestions
@@ -392,20 +427,31 @@ class EnterpriseWorkaroundManager:
         self.rag_system = rag_system
 
         # Determine the correct way to access vector_store and driver
-        if hasattr(rag_system, 'base_system'):
+        if hasattr(rag_system, "base_system"):
             # For EnhancedSelfLearningRAG, access through base_system
             base_system = rag_system.base_system
-            vector_store = base_system.vector_store if hasattr(base_system, 'vector_store') else None
-            driver = base_system.driver if hasattr(base_system, 'driver') else None
-        elif hasattr(rag_system, 'data_import_workflow'):
-            # For EnhancedSelfLearningRAG, access through data_import_workflow.rag_system
+            vector_store = (
+                base_system.vector_store
+                if hasattr(base_system, "vector_store")
+                else None
+            )
+            driver = base_system.driver if hasattr(base_system, "driver") else None
+        elif hasattr(rag_system, "data_import_workflow"):
+            # For EnhancedSelfLearningRAG, access through
+            # data_import_workflow.rag_system
             base_system = rag_system.data_import_workflow.rag_system
-            vector_store = base_system.vector_store if hasattr(base_system, 'vector_store') else None
-            driver = base_system.driver if hasattr(base_system, 'driver') else None
+            vector_store = (
+                base_system.vector_store
+                if hasattr(base_system, "vector_store")
+                else None
+            )
+            driver = base_system.driver if hasattr(base_system, "driver") else None
         else:
             # Direct access for AdvancedRAGSystem
-            vector_store = rag_system.vector_store if hasattr(rag_system, 'vector_store') else None
-            driver = rag_system.driver if hasattr(rag_system, 'driver') else None
+            vector_store = (
+                rag_system.vector_store if hasattr(rag_system, "vector_store") else None
+            )
+            driver = rag_system.driver if hasattr(rag_system, "driver") else None
 
         self.analytics = GraphAnalyticsWorkaround(driver)
         self.similarity = SimilarityAnalysisWorkaround(vector_store, driver)
@@ -418,22 +464,28 @@ class EnterpriseWorkaroundManager:
         print("🔧 Initializing Enterprise Feature Workarounds...")
 
         # Performance-Optimierungen
-        if hasattr(self, 'performance') and self.performance.driver:
+        if hasattr(self, "performance") and self.performance.driver:
             optimizations = await self.performance.optimize_indexes()
             successful_opts = sum(optimizations.values())
-            print(f"✅ Created {successful_opts}/{len(optimizations)} performance indexes")
+            print(
+                f"✅ Created {successful_opts}/{len(optimizations)} performance indexes"
+            )
 
         # Test Analytics
         try:
             important_nodes = await self.analytics.calculate_node_importance()
-            print(f"✅ Node importance calculation: {len(important_nodes)} nodes analyzed")
+            print(
+                f"✅ Node importance calculation: {len(important_nodes)} nodes analyzed"
+            )
         except Exception as e:
             print(f"⚠️ Analytics test failed: {e}")
 
         # Test Similarity
         try:
-            if hasattr(self.rag_system, 'vector_store'):
-                similar = await self.similarity.find_similar_concepts("machine learning", k=3)
+            if hasattr(self.rag_system, "vector_store"):
+                similar = await self.similarity.find_similar_concepts(
+                    "machine learning", k=3
+                )
                 print(f"✅ Similarity analysis: {len(similar)} similar concepts found")
         except Exception as e:
             print(f"⚠️ Similarity test failed: {e}")
@@ -445,28 +497,30 @@ class EnterpriseWorkaroundManager:
         Enterprise Analytics Dashboard (GDS Ersatz)
         """
         dashboard = {
-            'timestamp': asyncio.get_event_loop().time(),
-            'node_importance': [],
-            'concept_clusters': [],
-            'performance_metrics': {}
+            "timestamp": asyncio.get_event_loop().time(),
+            "node_importance": [],
+            "concept_clusters": [],
+            "performance_metrics": {},
         }
 
         try:
             # Node Importance
-            dashboard['node_importance'] = await self.analytics.calculate_node_importance()
+            dashboard[
+                "node_importance"
+            ] = await self.analytics.calculate_node_importance()
 
             # Concept Clustering
-            dashboard['concept_clusters'] = await self.analytics.find_concept_clusters()
+            dashboard["concept_clusters"] = await self.analytics.find_concept_clusters()
 
             # Performance Metrics
-            if hasattr(self, 'performance'):
-                dashboard['performance_metrics'] = {
-                    'indexes_optimized': True,
-                    'query_suggestions': []
+            if hasattr(self, "performance"):
+                dashboard["performance_metrics"] = {
+                    "indexes_optimized": True,
+                    "query_suggestions": [],
                 }
 
         except Exception as e:
-            dashboard['error'] = str(e)
+            dashboard["error"] = str(e)
 
         return dashboard
 

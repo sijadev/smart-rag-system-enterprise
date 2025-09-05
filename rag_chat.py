@@ -7,21 +7,25 @@ Nutzt zentrale Konfiguration mit Dependency Injection
 """
 
 import asyncio
-import sys
-import os
 import logging
+import os
+import sys
 from datetime import datetime
-from typing import List, Dict, Any, Optional
-
-# Lade src zum Python-Pfad hinzu
-sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
+from typing import Any, Dict, List, Optional
 
 from src.central_config import (
-    get_config, get_container, inject, configure_logging,
-    print_config_summary, CentralConfig, OllamaConfig
+    CentralConfig,
+    configure_logging,
+    get_config,
+    get_container,
+    print_config_summary,
 )
-from src.modern_factory import ModernLLMServiceFactory, register_llm_services
 from src.interfaces import ILLMService, QueryContext
+from src.modern_factory import register_llm_services
+
+# Lade src zum Python-Pfad hinzu
+sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
+
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +60,7 @@ class ModernRAGChatSession:
             await self.llm_service.initialize()
 
             provider_info = self.llm_service.get_provider_info()
-            print(f"✅ LLM Service bereit:")
+            print("✅ LLM Service bereit:")
             print(f"   🤖 Model: {provider_info['model']}")
             print(f"   🔢 Embedding Model: {provider_info['embedding_model']}")
             print(f"   🌐 Provider: {provider_info['provider']}")
@@ -78,23 +82,27 @@ class ModernRAGChatSession:
             context = QueryContext(
                 query_id=f"query_{len(self.conversation_history) + 1}",
                 session_id=self.session_id,
-                previous_queries=[msg["user"] for msg in self.conversation_history[-3:]],
+                previous_queries=[
+                    msg["user"] for msg in self.conversation_history[-3:]
+                ],
                 metadata={
                     "system_message": "Du bist ein hilfsbereiches AI-Assistant. Antworte präzise und freundlich auf Deutsch.",
                     "environment": self.config.system.environment.value,
-                    "debug": self.config.system.debug
-                }
+                    "debug": self.config.system.debug,
+                },
             )
 
             # Generiere Antwort
             response = await self.llm_service.generate(user_input, context)
 
             # Speichere in Verlauf
-            self.conversation_history.append({
-                "user": user_input,
-                "assistant": response,
-                "timestamp": datetime.now().isoformat()
-            })
+            self.conversation_history.append(
+                {
+                    "user": user_input,
+                    "assistant": response,
+                    "timestamp": datetime.now().isoformat(),
+                }
+            )
 
             return response
 
@@ -112,8 +120,12 @@ class ModernRAGChatSession:
         return {
             "session_id": self.session_id,
             "total_messages": len(self.conversation_history),
-            "environment": self.config.system.environment.value if self.config else "unknown",
-            "model": self.llm_service.get_provider_info()['model'] if self.llm_service else "unknown"
+            "environment": self.config.system.environment.value
+            if self.config
+            else "unknown",
+            "model": self.llm_service.get_provider_info()["model"]
+            if self.llm_service
+            else "unknown",
         }
 
 
@@ -160,21 +172,22 @@ async def main():
                     continue
 
                 # Befehle verarbeiten
-                if user_input.startswith('/'):
+                if user_input.startswith("/"):
                     command = user_input[1:].lower()
 
-                    if command in ['quit', 'q', 'exit']:
+                    if command in ["quit", "q", "exit"]:
                         print("👋 Auf Wiedersehen!")
                         break
 
-                    elif command in ['help', 'h']:
-                        print("""
+                    elif command in ["help", "h"]:
+                        print(
+                            """
 🆘 Modern RAG Chat - Hilfe
 =========================
 
 💬 Chat-Befehle:
    /status  - System-Status anzeigen
-   /config  - Aktuelle Konfiguration anzeigen  
+   /config  - Aktuelle Konfiguration anzeigen
    /info    - Session-Informationen
    /clear   - Verlauf löschen
    /quit    - Chat beenden
@@ -184,35 +197,42 @@ async def main():
    • Dependency Injection für alle Services
    • Automatische Modell-Auswahl basierend auf Environment
    • Kontextualisierte Konversationen
-""")
+"""
+                        )
                         continue
 
-                    elif command == 'status':
+                    elif command == "status":
                         if session.llm_service:
                             provider_info = session.llm_service.get_provider_info()
-                            print(f"\n🔧 System-Status:")
+                            print("\n🔧 System-Status:")
                             print(f"   🤖 Model: {provider_info['model']}")
-                            print(f"   🔢 Embedding Model: {provider_info['embedding_model']}")
+                            print(
+                                f"   🔢 Embedding Model: {provider_info['embedding_model']}"
+                            )
                             print(f"   🌐 Provider: {provider_info['provider']}")
-                            print(f"   📊 Verfügbare Modelle: {len(provider_info['available_models'])}")
-                            print(f"   🌍 Environment: {config.system.environment.value}")
+                            print(
+                                f"   📊 Verfügbare Modelle: {len(provider_info['available_models'])}"
+                            )
+                            print(
+                                f"   🌍 Environment: {config.system.environment.value}"
+                            )
                             print(f"   📝 Debug Mode: {config.system.debug}")
                         continue
 
-                    elif command == 'config':
+                    elif command == "config":
                         print_config_summary()
                         continue
 
-                    elif command == 'info':
+                    elif command == "info":
                         info = session.get_session_info()
-                        print(f"\n📊 Session-Informationen:")
+                        print("\n📊 Session-Informationen:")
                         print(f"   🆔 Session ID: {info['session_id']}")
                         print(f"   💬 Nachrichten: {info['total_messages']}")
                         print(f"   🌍 Environment: {info['environment']}")
                         print(f"   🤖 Model: {info['model']}")
                         continue
 
-                    elif command == 'clear':
+                    elif command == "clear":
                         session.conversation_history.clear()
                         print("🗑️ Konversations-Verlauf gelöscht")
                         continue

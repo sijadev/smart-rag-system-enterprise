@@ -8,14 +8,12 @@ Unterstützt sowohl Terminal- als auch Streamlit-basierte Interaktion.
 """
 
 import asyncio
-import sys
 import time
 from datetime import datetime
-from pathlib import Path
 
-from src.rag_system import create_rag_system, RAGConfig
-from src.self_learning_rag import SelfLearningRAGSystem, LearningConfig
-from intelligent_data_import import EnhancedSelfLearningRAG, create_intelligent_rag_system
+from intelligent_data_import import create_intelligent_rag_system
+
+from src.rag_system import RAGConfig
 
 
 class RAGChatInterface:
@@ -38,7 +36,7 @@ class RAGChatInterface:
             neo4j_password="password123",
             neo4j_database="neo4j",  # Verwende die reparierte neo4j Datenbank
             llm_provider="ollama",  # Verwende Ollama für bessere Antworten
-            documents_path="data/documents"
+            documents_path="data/documents",
         )
 
         # Teste Neo4j Verbindung
@@ -51,7 +49,7 @@ class RAGChatInterface:
         self.smart_rag = create_intelligent_rag_system(config)
 
         print("✅ Intelligentes RAG Chat System erfolgreich initialisiert!")
-        print(f"💡 Features: Self-Learning + Automatic Knowledge Gap Filling")
+        print("💡 Features: Self-Learning + Automatic Knowledge Gap Filling")
         print(f"🗄️ Modus: {'Neo4j Enterprise' if neo4j_available else 'Lokal'}")
         return True
 
@@ -59,7 +57,10 @@ class RAGChatInterface:
         """Teste Neo4j Verbindung"""
         try:
             from neo4j import GraphDatabase
-            driver = GraphDatabase.driver(config.neo4j_uri, auth=(config.neo4j_user, config.neo4j_password))
+
+            driver = GraphDatabase.driver(
+                config.neo4j_uri, auth=(config.neo4j_user, config.neo4j_password)
+            )
 
             # Versuche system DB
             try:
@@ -67,7 +68,7 @@ class RAGChatInterface:
                     session.run("RETURN 1")
                 driver.close()
                 return True
-            except:
+            except BaseException:
                 # Fallback zu Standard-DB
                 try:
                     with driver.session() as session:
@@ -75,10 +76,10 @@ class RAGChatInterface:
                     config.neo4j_database = None
                     driver.close()
                     return True
-                except:
+                except BaseException:
                     driver.close()
                     return False
-        except:
+        except BaseException:
             return False
 
     async def start_chat(self):
@@ -87,9 +88,9 @@ class RAGChatInterface:
             print("❌ System konnte nicht initialisiert werden")
             return
 
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print("🤖 Smart RAG Chat Interface")
-        print("="*60)
+        print("=" * 60)
         print("💡 Stellen Sie mir Fragen zu Ihren Dokumenten!")
         print("🔄 Das System lernt von jedem Gespräch")
         print("❓ Verfügbare Befehle:")
@@ -98,7 +99,7 @@ class RAGChatInterface:
         print("   /history - Chat-Verlauf")
         print("   /clear   - Verlauf löschen")
         print("   /quit    - Chat beenden")
-        print("="*60)
+        print("=" * 60)
 
         while True:
             try:
@@ -109,7 +110,7 @@ class RAGChatInterface:
                     continue
 
                 # Befehle verarbeiten
-                if user_input.startswith('/'):
+                if user_input.startswith("/"):
                     if await self._handle_command(user_input):
                         break
                     continue
@@ -127,11 +128,11 @@ class RAGChatInterface:
         """Verarbeite Chat-Befehle"""
         cmd = command.lower()
 
-        if cmd == '/quit':
+        if cmd == "/quit":
             print("\n👋 Auf Wiedersehen!")
             return True
 
-        elif cmd == '/help':
+        elif cmd == "/help":
             print("\n📚 Verfügbare Befehle:")
             print("   /help    - Diese Hilfe")
             print("   /stats   - System-Statistiken")
@@ -143,13 +144,13 @@ class RAGChatInterface:
             print("   • Machine Learning")
             print("   • Ihren hochgeladenen Dokumenten")
 
-        elif cmd == '/stats':
+        elif cmd == "/stats":
             await self._show_statistics()
 
-        elif cmd == '/history':
+        elif cmd == "/history":
             self._show_chat_history()
 
-        elif cmd == '/clear':
+        elif cmd == "/clear":
             self.chat_history.clear()
             print("🧹 Chat-Verlauf wurde gelöscht")
 
@@ -161,7 +162,9 @@ class RAGChatInterface:
 
     async def _process_user_query(self, query):
         """Verarbeite Benutzeranfrage mit intelligenter Auto-Import-Funktionalität"""
-        print(f"\n🤖 KI: Einen Moment, ich analysiere Ihre Frage und durchsuche meine Wissensdatenbank...")
+        print(
+            "\n🤖 KI: Einen Moment, ich analysiere Ihre Frage und durchsuche meine Wissensdatenbank..."
+        )
 
         start_time = time.time()
 
@@ -173,28 +176,34 @@ class RAGChatInterface:
             processing_time = end_time - start_time
 
             # Antwort anzeigen
-            answer = result.get('answer', 'Entschuldigung, ich konnte keine Antwort finden.')
+            answer = result.get(
+                "answer", "Entschuldigung, ich konnte keine Antwort finden."
+            )
 
             print(f"\n🤖 KI: {answer}")
 
             # Erweiterte Metadaten anzeigen
-            contexts = result.get('contexts', [])
+            contexts = result.get("contexts", [])
             sources_count = len(contexts)
-            workflow_type = result.get('workflow_type', 'standard')
+            workflow_type = result.get("workflow_type", "standard")
 
             # Basis-Info
             info_parts = [
                 f"{processing_time:.2f}s",
                 f"{sources_count} Quellen",
-                f"Strategie: {result.get('learning_metadata', {}).get('strategy', 'standard')}"
+                f"Strategie: {result.get('learning_metadata', {}).get('strategy', 'standard')}",
             ]
 
             # Auto-Import Info falls ausgelöst
             if result.get("auto_import_triggered", False):
-                imported_concepts = result.get('imported_concepts', [])
-                print(f"\n🔄 WISSEN ERWEITERT: Neue Konzepte hinzugefügt: {', '.join(imported_concepts)}")
-                enhancement = result.get('knowledge_enhancement', {})
-                print(f"📈 Qualitätsverbesserung: {enhancement.get('original_quality', 0):.2f} → Erweitert")
+                imported_concepts = result.get("imported_concepts", [])
+                print(
+                    f"\n🔄 WISSEN ERWEITERT: Neue Konzepte hinzugefügt: {', '.join(imported_concepts)}"
+                )
+                enhancement = result.get("knowledge_enhancement", {})
+                print(
+                    f"📈 Qualitätsverbesserung: {enhancement.get('original_quality', 0):.2f} → Erweitert"
+                )
                 info_parts.append("Auto-Import: ✅")
             else:
                 info_parts.append("Auto-Import: -")
@@ -202,59 +211,74 @@ class RAGChatInterface:
             print(f"\n📊 Info: {' | '.join(info_parts)}")
 
             # In Chat-History speichern mit erweiterten Daten
-            self.chat_history.append({
-                'timestamp': datetime.now(),
-                'user_query': query,
-                'ai_response': answer,
-                'processing_time': processing_time,
-                'sources_count': sources_count,
-                'strategy': result.get('learning_metadata', {}).get('strategy', 'standard'),
-                'workflow_type': workflow_type,
-                'auto_import_triggered': result.get("auto_import_triggered", False),
-                'imported_concepts': result.get('imported_concepts', [])
-            })
+            self.chat_history.append(
+                {
+                    "timestamp": datetime.now(),
+                    "user_query": query,
+                    "ai_response": answer,
+                    "processing_time": processing_time,
+                    "sources_count": sources_count,
+                    "strategy": result.get("learning_metadata", {}).get(
+                        "strategy", "standard"
+                    ),
+                    "workflow_type": workflow_type,
+                    "auto_import_triggered": result.get("auto_import_triggered", False),
+                    "imported_concepts": result.get("imported_concepts", []),
+                }
+            )
 
             # Bewertung erfragen (optional)
-            await self._ask_for_feedback(result.get('query_id', ''), answer)
+            await self._ask_for_feedback(result.get("query_id", ""), answer)
 
         except Exception as e:
-            print(f"\n❌ KI: Es tut mir leid, bei der Verarbeitung Ihrer Anfrage ist ein Fehler aufgetreten: {e}")
+            print(
+                f"\n❌ KI: Es tut mir leid, bei der Verarbeitung Ihrer Anfrage ist ein Fehler aufgetreten: {e}"
+            )
             import traceback
+
             traceback.print_exc()  # Für Debugging
 
     async def _ask_for_feedback(self, query_id, answer):
         """Einfaches Feedback-System"""
         try:
-            feedback = input("\n⭐ War diese Antwort hilfreich? (j/n/Enter zum Überspringen): ").strip().lower()
+            feedback = (
+                input(
+                    "\n⭐ War diese Antwort hilfreich? (j/n/Enter zum Überspringen): "
+                )
+                .strip()
+                .lower()
+            )
 
-            if feedback in ['j', 'ja', 'y', 'yes']:
+            if feedback in ["j", "ja", "y", "yes"]:
                 rating = 5.0
                 print("✅ Danke für Ihr positives Feedback!")
-            elif feedback in ['n', 'nein', 'no']:
+            elif feedback in ["n", "nein", "no"]:
                 rating = 2.0
-                print("📝 Danke für Ihr Feedback. Ich werde versuchen, beim nächsten Mal besser zu werden!")
+                print(
+                    "📝 Danke für Ihr Feedback. Ich werde versuchen, beim nächsten Mal besser zu werden!"
+                )
             else:
                 return  # Kein Feedback
 
             # Feedback an das Learning System senden
             await self.smart_rag.record_user_feedback(
-                query_id,
-                rating,
-                {'manual_feedback': True, 'interface': 'chat'}
+                query_id, rating, {"manual_feedback": True, "interface": "chat"}
             )
 
-        except:
+        except BaseException:
             pass  # Feedback ist optional
 
     async def _show_statistics(self):
         """Zeige System-Statistiken"""
-        print(f"\n📊 Chat-Statistiken:")
+        print("\n📊 Chat-Statistiken:")
         print(f"   🕒 Sitzungsdauer: {datetime.now() - self.session_start}")
         print(f"   💬 Anzahl Fragen: {len(self.chat_history)}")
 
         if self.chat_history:
-            avg_time = sum(h['processing_time'] for h in self.chat_history) / len(self.chat_history)
-            total_sources = sum(h['sources_count'] for h in self.chat_history)
+            avg_time = sum(h["processing_time"] for h in self.chat_history) / len(
+                self.chat_history
+            )
+            total_sources = sum(h["sources_count"] for h in self.chat_history)
 
             print(f"   ⚡ Durchschn. Antwortzeit: {avg_time:.2f}s")
             print(f"   📚 Verwendete Quellen: {total_sources}")
@@ -264,7 +288,7 @@ class RAGChatInterface:
             insights = await self.smart_rag.get_learning_insights()
             print(f"   🧠 System-Queries total: {insights.get('total_queries', 0)}")
             print(f"   🎯 Erkannte Query-Typen: {len(insights.get('query_types', {}))}")
-        except:
+        except BaseException:
             print("   🧠 Learning-Insights nicht verfügbar")
 
     def _show_chat_history(self):
@@ -277,13 +301,23 @@ class RAGChatInterface:
         print("-" * 60)
 
         for i, entry in enumerate(self.chat_history[-10:], 1):  # Letzte 10 Einträge
-            timestamp = entry['timestamp'].strftime("%H:%M:%S")
-            query_preview = entry['user_query'][:40] + "..." if len(entry['user_query']) > 40 else entry['user_query']
-            response_preview = entry['ai_response'][:60] + "..." if len(entry['ai_response']) > 60 else entry['ai_response']
+            timestamp = entry["timestamp"].strftime("%H:%M:%S")
+            query_preview = (
+                entry["user_query"][:40] + "..."
+                if len(entry["user_query"]) > 40
+                else entry["user_query"]
+            )
+            response_preview = (
+                entry["ai_response"][:60] + "..."
+                if len(entry["ai_response"]) > 60
+                else entry["ai_response"]
+            )
 
             print(f"{i:2d}. [{timestamp}] Sie: {query_preview}")
             print(f"    KI: {response_preview}")
-            print(f"    📊 {entry['processing_time']:.2f}s | {entry['sources_count']} Quellen")
+            print(
+                f"    📊 {entry['processing_time']:.2f}s | {entry['sources_count']} Quellen"
+            )
             print()
 
 

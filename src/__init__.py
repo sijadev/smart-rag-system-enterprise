@@ -1,3 +1,2 @@
-# src package init - enables relative imports within the src package
+# src package initializer
 __all__ = []
-

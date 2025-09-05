@@ -11,13 +11,12 @@ Dieser Launcher löst das bekannte Neo4j Enterprise Allokationsproblem durch:
 """
 
 import asyncio
-import json
-import numpy as np
 import time
-from pathlib import Path
+
+import numpy as np
 
 from src.rag_system import AdvancedRAGSystem, RAGConfig
-from src.self_learning_rag import SelfLearningRAGSystem, LearningConfig
+from src.self_learning_rag import LearningConfig, SelfLearningRAGSystem
 
 
 class EnterpriseNeo4jRAGLauncher:
@@ -36,20 +35,17 @@ class EnterpriseNeo4jRAGLauncher:
             neo4j_user="neo4j",
             neo4j_password="password123",
             neo4j_database="system",  # Explizit system DB für Enterprise
-
             # LLM Konfiguration
             llm_provider="local",  # Sicher für Enterprise ohne externe API-Abhängigkeiten
             documents_path="data/documents",
-
             # Enterprise Performance Settings
             max_tokens=2000,
             temperature=0.1,  # Konservativ für Unternehmen
-
             # Ollama Fallback (falls verfügbar)
             ollama_base_url="http://localhost:11434",
             ollama_model="nomic-embed-text:latest",
             ollama_chat_model="llama3.1:8b",
-            embedding_dimensions=768
+            embedding_dimensions=768,
         )
 
     async def validate_neo4j_enterprise(self) -> bool:
@@ -62,7 +58,7 @@ class EnterpriseNeo4jRAGLauncher:
             # Erstelle Driver
             driver = GraphDatabase.driver(
                 self.config.neo4j_uri,
-                auth=(self.config.neo4j_user, self.config.neo4j_password)
+                auth=(self.config.neo4j_user, self.config.neo4j_password),
             )
 
             # Strategie 1: Teste mit system Datenbank
@@ -75,10 +71,14 @@ class EnterpriseNeo4jRAGLauncher:
                     components = list(result)
 
                     for component in components:
-                        print(f"   📊 {component['name']}: {component['version']} ({component['edition']})")
+                        print(
+                            f"   📊 {component['name']}: {component['version']} ({component['edition']})"
+                        )
 
                     # Test einfache Query
-                    result = session.run("RETURN 'Neo4j Enterprise System DB Connected!' AS message")
+                    result = session.run(
+                        "RETURN 'Neo4j Enterprise System DB Connected!' AS message"
+                    )
                     message = result.single()["message"]
                     print(f"   ✅ {message}")
 
@@ -91,7 +91,9 @@ class EnterpriseNeo4jRAGLauncher:
                 # Strategie 2: Fallback zu Standard-Datenbank
                 try:
                     with driver.session() as session:
-                        result = session.run("RETURN 'Neo4j Enterprise Default DB Connected!' AS message")
+                        result = session.run(
+                            "RETURN 'Neo4j Enterprise Default DB Connected!' AS message"
+                        )
                         message = result.single()["message"]
                         print(f"   ✅ Fallback: {message}")
 
@@ -132,7 +134,7 @@ class EnterpriseNeo4jRAGLauncher:
             learning_config = LearningConfig(
                 learning_rate=0.15,  # Konservativ für Enterprise
                 optimization_interval=50,  # Weniger häufig für Stabilität
-                performance_history_size=1000
+                performance_history_size=1000,
             )
 
             # Erstelle Smart RAG System
@@ -156,7 +158,7 @@ class EnterpriseNeo4jRAGLauncher:
             "What are the key benefits of implementing renewable energy in enterprise environments?",
             "How can machine learning improve business processes and decision making?",
             "What are the cost considerations for solar vs wind power in large-scale deployments?",
-            "What are best practices for AI governance and risk management in enterprises?"
+            "What are best practices for AI governance and risk management in enterprises?",
         ]
 
         print("🚀 Starting Enterprise RAG Demo...")
@@ -165,7 +167,9 @@ class EnterpriseNeo4jRAGLauncher:
         results_summary = []
 
         for i, question in enumerate(enterprise_questions, 1):
-            print(f"🔍 Enterprise Query {i}/{len(enterprise_questions)}: {question[:60]}...")
+            print(
+                f"🔍 Enterprise Query {i}/{len(enterprise_questions)}: {question[:60]}..."
+            )
 
             try:
                 start_time = time.time()
@@ -173,42 +177,44 @@ class EnterpriseNeo4jRAGLauncher:
                 end_time = time.time()
 
                 processing_time = end_time - start_time
-                answer_preview = result.get('answer', '')[:100] + "..." if len(result.get('answer', '')) > 100 else result.get('answer', '')
+                answer_preview = (
+                    result.get("answer", "")[:100] + "..."
+                    if len(result.get("answer", "")) > 100
+                    else result.get("answer", "")
+                )
 
                 print(f"   ✅ Answer: {answer_preview}")
                 print(f"   ⚡ Processing Time: {processing_time:.2f}s")
                 print(f"   📈 Sources: {result.get('sources_count', 0)}")
 
                 # Simuliere Enterprise Feedback
-                rating = np.random.uniform(4.2, 4.9)  # Enterprise erwartet hohe Qualität
+                # Enterprise erwartet hohe Qualität
+                rating = np.random.uniform(4.2, 4.9)
                 feedback_metadata = {
-                    'enterprise_context': True,
-                    'business_relevance': 'high',
-                    'accuracy_rating': 'excellent' if rating > 4.5 else 'good',
-                    'deployment_environment': 'production'
+                    "enterprise_context": True,
+                    "business_relevance": "high",
+                    "accuracy_rating": "excellent" if rating > 4.5 else "good",
+                    "deployment_environment": "production",
                 }
 
                 await self.smart_rag.record_user_feedback(
-                    result.get('query_id', f'enterprise_{i}'),
-                    rating,
-                    feedback_metadata
+                    result.get("query_id", f"enterprise_{i}"), rating, feedback_metadata
                 )
 
                 print(f"   ⭐ Enterprise Rating: {rating:.1f}/5.0")
 
-                results_summary.append({
-                    'query': question,
-                    'processing_time': processing_time,
-                    'rating': rating,
-                    'sources_count': result.get('sources_count', 0)
-                })
+                results_summary.append(
+                    {
+                        "query": question,
+                        "processing_time": processing_time,
+                        "rating": rating,
+                        "sources_count": result.get("sources_count", 0),
+                    }
+                )
 
             except Exception as query_error:
                 print(f"   ❌ Query failed: {query_error}")
-                results_summary.append({
-                    'query': question,
-                    'error': str(query_error)
-                })
+                results_summary.append({"query": question, "error": str(query_error)})
 
             print()  # Leerzeile für bessere Lesbarkeit
 
@@ -221,19 +227,25 @@ class EnterpriseNeo4jRAGLauncher:
         print("=" * 50)
 
         # Berechne Metriken
-        successful_queries = [r for r in results_summary if 'error' not in r]
-        failed_queries = [r for r in results_summary if 'error' in r]
+        successful_queries = [r for r in results_summary if "error" not in r]
+        failed_queries = [r for r in results_summary if "error" in r]
 
         if successful_queries:
-            avg_processing_time = np.mean([r['processing_time'] for r in successful_queries])
-            avg_rating = np.mean([r['rating'] for r in successful_queries])
-            total_sources = sum([r['sources_count'] for r in successful_queries])
+            avg_processing_time = np.mean(
+                [r["processing_time"] for r in successful_queries]
+            )
+            avg_rating = np.mean([r["rating"] for r in successful_queries])
+            total_sources = sum([r["sources_count"] for r in successful_queries])
 
-            print(f"✅ Success Rate: {len(successful_queries)}/{len(results_summary)} ({len(successful_queries)/len(results_summary)*100:.1f}%)")
+            print(
+                f"✅ Success Rate: {len(successful_queries)}/{len(results_summary)} ({len(successful_queries) / len(results_summary) * 100:.1f}%)"
+            )
             print(f"⚡ Average Processing Time: {avg_processing_time:.2f}s")
             print(f"⭐ Average Quality Rating: {avg_rating:.2f}/5.0")
             print(f"📚 Total Sources Utilized: {total_sources}")
-            print(f"🎯 Enterprise SLA: {'✅ PASSED' if avg_processing_time < 5.0 and avg_rating > 4.0 else '⚠️ REVIEW NEEDED'}")
+            print(
+                f"🎯 Enterprise SLA: {'✅ PASSED' if avg_processing_time < 5.0 and avg_rating > 4.0 else '⚠️ REVIEW NEEDED'}"
+            )
 
         if failed_queries:
             print(f"\n⚠️ Failed Queries: {len(failed_queries)}")
@@ -243,7 +255,7 @@ class EnterpriseNeo4jRAGLauncher:
         # Learning Insights
         try:
             insights = await self.smart_rag.get_learning_insights()
-            print(f"\n🧠 Learning System Status:")
+            print("\n🧠 Learning System Status:")
             print(f"   📊 Total Queries: {insights.get('total_queries', 0)}")
             print(f"   📈 Learning Progress: {insights.get('learning_progress', {})}")
             print(f"   🎯 Detected Query Types: {len(insights.get('query_types', {}))}")

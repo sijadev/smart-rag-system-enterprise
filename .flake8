@@ -1,0 +1,4 @@
+[flake8]
+max-line-length = 200
+exclude = .venv,build,dist,__pycache__,*.pyc,plantuml.jar
+extend-ignore = E203

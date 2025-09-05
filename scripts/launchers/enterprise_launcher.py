@@ -13,9 +13,7 @@ Startet das vollständige RAG-System mit Neo4j Enterprise Features:
 
 import subprocess
 import sys
-import time
-import asyncio
-from pathlib import Path
+
 
 class EnterpriseRAGLauncher:
     """Launcher für Neo4j Enterprise RAG System mit allen Premium-Features"""
@@ -29,13 +27,26 @@ class EnterpriseRAGLauncher:
 
         try:
             # Test GDS Installation
-            result = subprocess.run([
-                'docker', 'exec', 'neo4j-rag',
-                'cypher-shell', '-u', 'neo4j', '-p', 'password123', '-d', 'neo4j',
-                'CALL gds.version() YIELD gdsVersion RETURN gdsVersion'
-            ], capture_output=True, text=True, timeout=10)
+            result = subprocess.run(
+                [
+                    "docker",
+                    "exec",
+                    "neo4j-rag",
+                    "cypher-shell",
+                    "-u",
+                    "neo4j",
+                    "-p",
+                    "password123",
+                    "-d",
+                    "neo4j",
+                    "CALL gds.version() YIELD gdsVersion RETURN gdsVersion",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
 
-            if result.returncode == 0 and 'gdsVersion' in result.stdout:
+            if result.returncode == 0 and "gdsVersion" in result.stdout:
                 print("✅ Graph Data Science (GDS) verfügbar")
                 gds_available = True
             else:
@@ -43,13 +54,26 @@ class EnterpriseRAGLauncher:
                 gds_available = False
 
             # Test APOC Installation
-            result = subprocess.run([
-                'docker', 'exec', 'neo4j-rag',
-                'cypher-shell', '-u', 'neo4j', '-p', 'password123', '-d', 'neo4j',
-                'CALL apoc.version() YIELD version RETURN version'
-            ], capture_output=True, text=True, timeout=10)
+            result = subprocess.run(
+                [
+                    "docker",
+                    "exec",
+                    "neo4j-rag",
+                    "cypher-shell",
+                    "-u",
+                    "neo4j",
+                    "-p",
+                    "password123",
+                    "-d",
+                    "neo4j",
+                    "CALL apoc.version() YIELD version RETURN version",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
 
-            if result.returncode == 0 and 'version' in result.stdout:
+            if result.returncode == 0 and "version" in result.stdout:
                 print("✅ APOC Library verfügbar")
                 apoc_available = True
             else:
@@ -57,11 +81,24 @@ class EnterpriseRAGLauncher:
                 apoc_available = False
 
             # Test Multi-Database
-            result = subprocess.run([
-                'docker', 'exec', 'neo4j-rag',
-                'cypher-shell', '-u', 'neo4j', '-p', 'password123', '-d', 'system',
-                'SHOW DATABASES'
-            ], capture_output=True, text=True, timeout=10)
+            result = subprocess.run(
+                [
+                    "docker",
+                    "exec",
+                    "neo4j-rag",
+                    "cypher-shell",
+                    "-u",
+                    "neo4j",
+                    "-p",
+                    "password123",
+                    "-d",
+                    "system",
+                    "SHOW DATABASES",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
 
             if result.returncode == 0:
                 print("✅ Multi-Database Support verfügbar")
@@ -71,14 +108,14 @@ class EnterpriseRAGLauncher:
                 multi_db_available = False
 
             return {
-                'gds': gds_available,
-                'apoc': apoc_available,
-                'multi_db': multi_db_available
+                "gds": gds_available,
+                "apoc": apoc_available,
+                "multi_db": multi_db_available,
             }
 
         except Exception as e:
             print(f"⚠️ Error checking enterprise features: {e}")
-            return {'gds': False, 'apoc': False, 'multi_db': False}
+            return {"gds": False, "apoc": False, "multi_db": False}
 
     def setup_enterprise_databases(self):
         """Erstellt spezialisierte Datenbanken für Enterprise-Features"""
@@ -86,11 +123,23 @@ class EnterpriseRAGLauncher:
 
         try:
             # Erstelle RAG-spezifische Datenbank
-            result = subprocess.run([
-                'docker', 'exec', 'neo4j-rag',
-                'cypher-shell', '-u', 'neo4j', '-p', 'password123', '-d', 'system',
-                'CREATE DATABASE ragkb IF NOT EXISTS'
-            ], capture_output=True, text=True)
+            result = subprocess.run(
+                [
+                    "docker",
+                    "exec",
+                    "neo4j-rag",
+                    "cypher-shell",
+                    "-u",
+                    "neo4j",
+                    "-p",
+                    "password123",
+                    "-d",
+                    "system",
+                    "CREATE DATABASE ragkb IF NOT EXISTS",
+                ],
+                capture_output=True,
+                text=True,
+            )
 
             if result.returncode == 0:
                 print("✅ RAG Knowledge Base Database erstellt: ragkb")
@@ -98,11 +147,23 @@ class EnterpriseRAGLauncher:
                 print("⚠️ RAG Database bereits vorhanden oder Fehler")
 
             # Erstelle Learning-Database
-            result = subprocess.run([
-                'docker', 'exec', 'neo4j-rag',
-                'cypher-shell', '-u', 'neo4j', '-p', 'password123', '-d', 'system',
-                'CREATE DATABASE learning IF NOT EXISTS'
-            ], capture_output=True, text=True)
+            result = subprocess.run(
+                [
+                    "docker",
+                    "exec",
+                    "neo4j-rag",
+                    "cypher-shell",
+                    "-u",
+                    "neo4j",
+                    "-p",
+                    "password123",
+                    "-d",
+                    "system",
+                    "CREATE DATABASE learning IF NOT EXISTS",
+                ],
+                capture_output=True,
+                text=True,
+            )
 
             if result.returncode == 0:
                 print("✅ Learning Database erstellt: learning")
@@ -129,11 +190,23 @@ class EnterpriseRAGLauncher:
             )
             """
 
-            result = subprocess.run([
-                'docker', 'exec', 'neo4j-rag',
-                'cypher-shell', '-u', 'neo4j', '-p', 'password123', '-d', 'neo4j',
-                gds_setup
-            ], capture_output=True, text=True)
+            result = subprocess.run(
+                [
+                    "docker",
+                    "exec",
+                    "neo4j-rag",
+                    "cypher-shell",
+                    "-u",
+                    "neo4j",
+                    "-p",
+                    "password123",
+                    "-d",
+                    "neo4j",
+                    gds_setup,
+                ],
+                capture_output=True,
+                text=True,
+            )
 
             if result.returncode == 0:
                 print("✅ GDS Knowledge Graph Projection erstellt")
@@ -152,9 +225,11 @@ class EnterpriseRAGLauncher:
 
         try:
             # Starte Prometheus und Grafana wenn verfügbar
-            result = subprocess.run([
-                'docker-compose', 'up', '-d', '--profile', 'monitoring'
-            ], capture_output=True, text=True)
+            result = subprocess.run(
+                ["docker-compose", "up", "-d", "--profile", "monitoring"],
+                capture_output=True,
+                text=True,
+            )
 
             if result.returncode == 0:
                 print("✅ Monitoring Services gestartet")
@@ -182,21 +257,33 @@ class EnterpriseRAGLauncher:
             CREATE (concept1:Concept {name: "Graph Neural Networks", domain: "AI"})
             CREATE (concept2:Concept {name: "Enterprise Analytics", domain: "Business"})
             CREATE (entity1:Entity {name: "Neo4j GDS", type: "Technology"})
-            
+
             // Erstelle Enterprise Relationships
             CREATE (doc1)-[:CONTAINS]->(concept1)
             CREATE (doc2)-[:CONTAINS]->(concept2)
             CREATE (concept1)-[:RELATED_TO]->(entity1)
             CREATE (doc1)-[:REFERENCES]->(doc2)
-            
+
             RETURN "Enterprise test data created" as status
             """
 
-            result = subprocess.run([
-                'docker', 'exec', 'neo4j-rag',
-                'cypher-shell', '-u', 'neo4j', '-p', 'password123', '-d', 'neo4j',
-                test_data
-            ], capture_output=True, text=True)
+            result = subprocess.run(
+                [
+                    "docker",
+                    "exec",
+                    "neo4j-rag",
+                    "cypher-shell",
+                    "-u",
+                    "neo4j",
+                    "-p",
+                    "password123",
+                    "-d",
+                    "neo4j",
+                    test_data,
+                ],
+                capture_output=True,
+                text=True,
+            )
 
             if result.returncode == 0:
                 print("✅ Enterprise Test-Daten erstellt")
@@ -209,11 +296,23 @@ class EnterpriseRAGLauncher:
                 ORDER BY score DESC LIMIT 5
                 """
 
-                result = subprocess.run([
-                    'docker', 'exec', 'neo4j-rag',
-                    'cypher-shell', '-u', 'neo4j', '-p', 'password123', '-d', 'neo4j',
-                    pagerank_test
-                ], capture_output=True, text=True)
+                result = subprocess.run(
+                    [
+                        "docker",
+                        "exec",
+                        "neo4j-rag",
+                        "cypher-shell",
+                        "-u",
+                        "neo4j",
+                        "-p",
+                        "password123",
+                        "-d",
+                        "neo4j",
+                        pagerank_test,
+                    ],
+                    capture_output=True,
+                    text=True,
+                )
 
                 if result.returncode == 0:
                     print("✅ GDS PageRank Algorithm erfolgreich getestet")
@@ -239,11 +338,11 @@ class EnterpriseRAGLauncher:
         features = self.check_enterprise_features()
 
         # 2. Setup Database Structure
-        if features['multi_db']:
+        if features["multi_db"]:
             self.setup_enterprise_databases()
 
         # 3. Initialize GDS
-        if features['gds']:
+        if features["gds"]:
             self.initialize_gds_workspace()
 
         # 4. Start Monitoring
@@ -261,19 +360,21 @@ class EnterpriseRAGLauncher:
             print("Starting Intelligent Chat Interface...")
 
             try:
-                subprocess.run([sys.executable, 'rag_chat.py'], check=True)
+                subprocess.run([sys.executable, "rag_chat.py"], check=True)
             except KeyboardInterrupt:
                 print("\n👋 Enterprise RAG System gestoppt")
             except Exception as e:
                 print(f"❌ Error starting RAG Chat: {e}")
         else:
-            print("❌ Enterprise Integration nicht vollständig - verwende Basis-Funktionen")
+            print(
+                "❌ Enterprise Integration nicht vollständig - verwende Basis-Funktionen"
+            )
 
     def show_enterprise_dashboard(self, features):
         """Zeigt das Enterprise Dashboard"""
-        print("\n" + "="*70)
+        print("\n" + "=" * 70)
         print("🏢 NEO4J ENTERPRISE RAG SYSTEM DASHBOARD")
-        print("="*70)
+        print("=" * 70)
         print("🌐 Neo4j Browser:     http://localhost:7474")
         print("🔗 Bolt Connection:   bolt://localhost:7687")
         print("👤 Username:          neo4j")
@@ -291,7 +392,7 @@ class EnterpriseRAGLauncher:
         print("   ✅ Auto-Import Workflow")
         print("   ✅ Self-Learning System")
         print("   ✅ Ollama LLM Integration")
-        if features['gds']:
+        if features["gds"]:
             print("   ✅ Graph Neural Networks")
             print("   ✅ Advanced Analytics (PageRank, Community Detection)")
             print("   ✅ Similarity Analysis")
@@ -300,14 +401,14 @@ class EnterpriseRAGLauncher:
         print("   📊 Prometheus: http://localhost:9090")
         print("   📈 Grafana: http://localhost:3000")
 
-        print("="*70)
+        print("=" * 70)
 
     def stop_enterprise_services(self):
         """Stoppt alle Enterprise Services"""
         print("🛑 Stopping Enterprise RAG Services...")
 
         try:
-            subprocess.run(['docker-compose', 'down', '--volumes'], check=True)
+            subprocess.run(["docker-compose", "down", "--volumes"], check=True)
             print("✅ Alle Enterprise Services gestoppt")
         except Exception as e:
             print(f"❌ Error stopping services: {e}")
@@ -322,7 +423,7 @@ def main():
         "--action",
         choices=["start", "test", "stop"],
         default="start",
-        help="Action to perform"
+        help="Action to perform",
     )
 
     args = parser.parse_args()

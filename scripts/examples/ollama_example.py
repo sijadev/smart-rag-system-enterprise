@@ -5,7 +5,9 @@ Demonstriert die Nutzung des nomic-embed-text-v1.5 Modells
 """
 
 import asyncio
+
 from src.rag_system import OllamaRAGSystem, RAGConfig, setup_ollama_models
+
 
 async def main():
     print("🦙 Ollama RAG System Demo")
@@ -23,10 +25,10 @@ async def main():
     config = RAGConfig(
         llm_provider="ollama",
         ollama_model="nomic-embed-text-v1.5",  # Embedding-Modell
-        ollama_chat_model="llama3.1:8b",       # Chat-Modell
+        ollama_chat_model="llama3.1:8b",  # Chat-Modell
         embedding_dimensions=768,
         temperature=0.1,
-        max_tokens=1000
+        max_tokens=1000,
     )
 
     # 3. RAG System initialisieren
@@ -60,8 +62,8 @@ async def main():
         """,
         """
         Machine Learning (ML) ist ein Teilbereich der Künstlichen Intelligenz (KI), der es Computersystemen ermöglicht,
-        automatisch zu lernen und sich zu verbessern, ohne explizit programmiert zu werden. 
-        ML-Algorithmen erstellen mathematische Modelle basierend auf Trainingsdaten, um Vorhersagen oder 
+        automatisch zu lernen und sich zu verbessern, ohne explizit programmiert zu werden.
+        ML-Algorithmen erstellen mathematische Modelle basierend auf Trainingsdaten, um Vorhersagen oder
         Entscheidungen zu treffen, ohne für spezifische Aufgaben programmiert zu werden.
         """,
         """
@@ -69,13 +71,13 @@ async def main():
         die die Vorteile von vortrainierten Sprachmodellen mit externen Wissensdatenbanken kombiniert.
         RAG-Systeme rufen relevante Informationen aus einer Datenbank ab und verwenden diese als Kontext
         für die Generierung präziser und faktisch korrekter Antworten.
-        """
+        """,
     ]
 
     for i, doc in enumerate(example_docs):
-        success = await rag_system.add_document(doc, {"source": f"example_{i+1}"})
+        success = await rag_system.add_document(doc, {"source": f"example_{i + 1}"})
         if success:
-            print(f"   ✅ Added document {i+1}")
+            print(f"   ✅ Added document {i + 1}")
 
     # 8. Beispiel-Queries ausführen
     print("\n❓ Example Queries:")
@@ -86,7 +88,7 @@ async def main():
         "Erkläre Machine Learning",
         "Wie funktioniert RAG?",
         "What are the main features of Python?",
-        "Welche Programmierparadigmen unterstützt Python?"
+        "Welche Programmierparadigmen unterstützt Python?",
     ]
 
     for query in queries:
@@ -110,7 +112,7 @@ async def main():
 
     for i, query in enumerate(batch_queries):
         result = await rag_system.query(query, k=2)
-        print(f"   Query {i+1}: {result['processing_time']:.2f}s")
+        print(f"   Query {i + 1}: {result['processing_time']:.2f}s")
 
     total_time = time.time() - start_time
     avg_time = total_time / len(batch_queries)
@@ -121,6 +123,7 @@ async def main():
     print("\n🧹 Cleaning up...")
     rag_system.close()
     print("✅ Demo completed successfully!")
+
 
 if __name__ == "__main__":
     asyncio.run(main())

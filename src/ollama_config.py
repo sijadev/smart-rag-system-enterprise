@@ -9,14 +9,15 @@ Konfiguration und Hilfsfunktionen für Ollama-Integration
 import asyncio
 import logging
 import os
-from typing import Dict, Any, List, Optional
-from dataclasses import dataclass, asdict
-from .llm_services import OllamaLLMService, OllamaConfig
-from .interfaces import LLMProvider
+from dataclasses import asdict, dataclass
+from typing import Any, Dict, List, Optional
+
+from .llm_services import OllamaConfig, OllamaLLMService
 
 # Lade .env-Datei automatisch
 try:
     from dotenv import load_dotenv
+
     load_dotenv()
 except ImportError:
     # Falls python-dotenv nicht installiert ist, ignoriere es
@@ -28,6 +29,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class OllamaSystemConfig:
     """System-weite Ollama-Konfiguration"""
+
     base_url: str = "http://localhost:11434"
     default_model: str = "llama3.2:latest"  # Aktualisiert von llama2
     default_embedding_model: str = "nomic-embed-text:latest"  # Aktualisiert von llama2
@@ -46,7 +48,9 @@ class OllamaSystemConfig:
         # Lade Werte aus .env-Datei
         self.base_url = os.getenv("OLLAMA_BASE_URL", self.base_url)
         self.default_model = os.getenv("LLM_MODEL", self.default_model)
-        self.default_embedding_model = os.getenv("EMBED_MODEL", self.default_embedding_model)
+        self.default_embedding_model = os.getenv(
+            "EMBED_MODEL", self.default_embedding_model
+        )
         self.chat_model = os.getenv("ANALYZER_MODEL", self.chat_model)
 
         # Numerische Werte sicher parsen
@@ -56,7 +60,9 @@ class OllamaSystemConfig:
             pass
 
         try:
-            self.max_retries = int(os.getenv("OLLAMA_MAX_RETRIES", str(self.max_retries)))
+            self.max_retries = int(
+                os.getenv("OLLAMA_MAX_RETRIES", str(self.max_retries))
+            )
         except ValueError:
             pass
 
@@ -68,12 +74,13 @@ class OllamaSystemConfig:
                 "mistral:latest",
                 "codellama:latest",
                 "codellama:7b",
-                "nomic-embed-text:latest"
+                "nomic-embed-text:latest",
             ]
 
         # Chat-Model Fallback
         if self.chat_model is None:
             self.chat_model = self.default_model
+
 
 class OllamaHealthChecker:
     """Ollama Gesundheitscheck und Monitoring"""
@@ -100,7 +107,7 @@ class OllamaHealthChecker:
                     "available_models": provider_info.get("available_models", []),
                     "running_models": running_models,
                     "default_model": self.config.default_model,
-                    "connection": "successful"
+                    "connection": "successful",
                 }
 
         except Exception as e:
@@ -109,12 +116,17 @@ class OllamaHealthChecker:
                 "status": "unhealthy",
                 "base_url": self.config.base_url,
                 "error": str(e),
-                "connection": "failed"
+                "connection": "failed",
             }
 
-    async def ensure_models_available(self, models: List[str] = None) -> Dict[str, bool]:
+    async def ensure_models_available(
+        self, models: List[str] = None
+    ) -> Dict[str, bool]:
         """Stellt sicher, dass erforderliche Modelle verfügbar sind"""
-        models = models or [self.config.default_model, self.config.default_embedding_model]
+        models = models or [
+            self.config.default_model,
+            self.config.default_embedding_model,
+        ]
         results = {}
 
         try:
@@ -122,10 +134,13 @@ class OllamaHealthChecker:
 
             async with OllamaLLMService(temp_config) as service:
                 await service.initialize()
-                available_models = service.get_provider_info().get("available_models", [])
+                available_models = service.get_provider_info().get(
+                    "available_models", []
+                )
 
                 for model in models:
-                    model_base = model.split(":")[0]  # Entferne Tag falls vorhanden
+                    # Entferne Tag falls vorhanden
+                    model_base = model.split(":")[0]
                     if model_base in available_models:
                         results[model] = True
                         logger.info(f"Modell {model} ist verfügbar")
@@ -140,7 +155,9 @@ class OllamaHealthChecker:
                             results[model] = False
                     else:
                         results[model] = False
-                        logger.warning(f"Modell {model} nicht verfügbar und auto_pull deaktiviert")
+                        logger.warning(
+                            f"Modell {model} nicht verfügbar und auto_pull deaktiviert"
+                        )
 
         except Exception as e:
             logger.error(f"Fehler bei Modell-Check: {e}")
@@ -160,25 +177,26 @@ class OllamaConfigurationManager:
         # Legacy-Support für bestehende ENV-Variablen
         base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 
-        # Primäre Modell-Konfiguration - priorisiere spezifische OLLAMA_ Variablen, dann LLM_MODEL
+        # Primäre Modell-Konfiguration - priorisiere spezifische OLLAMA_
+        # Variablen, dann LLM_MODEL
         default_model = (
-            os.getenv("OLLAMA_MODEL") or
-            os.getenv("LLM_MODEL") or
-            "llama3.2:latest"  # Besserer Fallback statt llama2
+            os.getenv("OLLAMA_MODEL")
+            or os.getenv("LLM_MODEL")
+            or "llama3.2:latest"  # Besserer Fallback statt llama2
         )
 
         # Embedding-Modell-Konfiguration
         embedding_model = (
-            os.getenv("OLLAMA_EMBEDDING_MODEL") or
-            os.getenv("EMBED_MODEL") or
-            "nomic-embed-text:latest"  # Besserer Fallback
+            os.getenv("OLLAMA_EMBEDDING_MODEL")
+            or os.getenv("EMBED_MODEL")
+            or "nomic-embed-text:latest"  # Besserer Fallback
         )
 
         # Chat-Modell (für Enterprise-Setup)
         chat_model = (
-            os.getenv("OLLAMA_CHAT_MODEL") or
-            os.getenv("ANALYZER_MODEL") or
-            default_model
+            os.getenv("OLLAMA_CHAT_MODEL")
+            or os.getenv("ANALYZER_MODEL")
+            or default_model
         )
 
         # Timeout-Konfiguration
@@ -191,24 +209,39 @@ class OllamaConfigurationManager:
                 return default
             try:
                 # Entferne Kommentare nach #
-                clean_value = value.split('#')[0].strip()
+                clean_value = value.split("#")[0].strip()
                 return int(clean_value) if clean_value else default
             except (ValueError, AttributeError):
                 return default
 
-        embedding_dimensions = parse_int_with_comment(os.getenv("EMBEDDING_DIMENSIONS"), 768)
-        embedding_batch_size = parse_int_with_comment(os.getenv("EMBEDDING_BATCH_SIZE"), 32)
-        use_local_embeddings = os.getenv("USE_LOCAL_EMBEDDINGS", "true").lower() == "true"
+        embedding_dimensions = parse_int_with_comment(
+            os.getenv("EMBEDDING_DIMENSIONS"), 768
+        )
+        embedding_batch_size = parse_int_with_comment(
+            os.getenv("EMBEDDING_BATCH_SIZE"), 32
+        )
+        use_local_embeddings = (
+            os.getenv("USE_LOCAL_EMBEDDINGS", "true").lower() == "true"
+        )
 
         # Auto-Pull basierend auf Environment
         environment = os.getenv("ENVIRONMENT", "development")
-        auto_pull = os.getenv("OLLAMA_AUTO_PULL", "true" if environment == "development" else "false").lower() == "true"
+        auto_pull = (
+            os.getenv(
+                "OLLAMA_AUTO_PULL", "true" if environment == "development" else "false"
+            ).lower()
+            == "true"
+        )
 
         # Empfohlene Modelle aus ENV
         recommended_models_str = os.getenv("OLLAMA_RECOMMENDED_MODELS", "")
-        recommended_models = [m.strip() for m in recommended_models_str.split(",") if m.strip()] if recommended_models_str else None
+        recommended_models = (
+            [m.strip() for m in recommended_models_str.split(",") if m.strip()]
+            if recommended_models_str
+            else None
+        )
 
-        logger.info(f"Lade Ollama-Konfiguration aus .env-Dateien:")
+        logger.info("Lade Ollama-Konfiguration aus .env-Dateien:")
         logger.info(f"  Base URL: {base_url}")
         logger.info(f"  Default Model: {default_model}")
         logger.info(f"  Embedding Model: {embedding_model}")
@@ -226,18 +259,20 @@ class OllamaConfigurationManager:
             recommended_models=recommended_models,
             embedding_dimensions=embedding_dimensions,
             embedding_batch_size=embedding_batch_size,
-            use_local_embeddings=use_local_embeddings
+            use_local_embeddings=use_local_embeddings,
         )
 
     @staticmethod
-    def create_llm_config(system_config: OllamaSystemConfig, **overrides) -> OllamaConfig:
+    def create_llm_config(
+        system_config: OllamaSystemConfig, **overrides
+    ) -> OllamaConfig:
         """Erstellt LLM-Service-Konfiguration aus System-Konfiguration"""
         base_config = {
             "base_url": system_config.base_url,
             "model": system_config.default_model,
             "embedding_model": system_config.default_embedding_model,
             "timeout": system_config.timeout,
-            "max_retries": system_config.max_retries
+            "max_retries": system_config.max_retries,
         }
 
         # Überschreibungen anwenden
@@ -246,7 +281,9 @@ class OllamaConfigurationManager:
         return OllamaConfig(**base_config)
 
     @staticmethod
-    def create_chat_config(system_config: OllamaSystemConfig, **overrides) -> OllamaConfig:
+    def create_chat_config(
+        system_config: OllamaSystemConfig, **overrides
+    ) -> OllamaConfig:
         """Erstellt Chat-spezifische Konfiguration"""
         chat_config = {
             "base_url": system_config.base_url,
@@ -255,7 +292,7 @@ class OllamaConfigurationManager:
             "timeout": system_config.timeout,
             "max_retries": system_config.max_retries,
             "temperature": float(os.getenv("TEMPERATURE", "0.1")),
-            "max_tokens": int(os.getenv("MAX_TOKENS", "1500"))
+            "max_tokens": int(os.getenv("MAX_TOKENS", "1500")),
         }
 
         chat_config.update(overrides)
@@ -268,7 +305,7 @@ class OllamaIntegrationHelper:
     @staticmethod
     async def setup_ollama_for_rag(
         system_config: Optional[OllamaSystemConfig] = None,
-        models_needed: List[str] = None
+        models_needed: List[str] = None,
     ) -> Dict[str, Any]:
         """Komplette Ollama-Setup für RAG System"""
 
@@ -278,7 +315,7 @@ class OllamaIntegrationHelper:
         if models_needed is None:
             models_needed = [
                 system_config.default_model,
-                system_config.default_embedding_model
+                system_config.default_embedding_model,
             ]
 
         logger.info("Starte Ollama-Setup für RAG System...")
@@ -292,13 +329,15 @@ class OllamaIntegrationHelper:
             return {
                 "success": False,
                 "error": "Ollama Health Check fehlgeschlagen",
-                "details": health_status
+                "details": health_status,
             }
 
         # Modelle überprüfen/laden
         model_status = await health_checker.ensure_models_available(models_needed)
 
-        missing_models = [model for model, available in model_status.items() if not available]
+        missing_models = [
+            model for model, available in model_status.items() if not available
+        ]
         if missing_models:
             logger.warning(f"Nicht verfügbare Modelle: {missing_models}")
 
@@ -310,7 +349,9 @@ class OllamaIntegrationHelper:
                 await service.initialize()
 
                 # Test-Generation
-                test_response = await service.generate("Hallo, funktioniert die Ollama-Integration?")
+                test_response = await service.generate(
+                    "Hallo, funktioniert die Ollama-Integration?"
+                )
 
                 # Test-Embedding
                 test_embedding = await service.embed("Test Text für Embeddings")
@@ -325,7 +366,7 @@ class OllamaIntegrationHelper:
                     "test_embedding": len(test_embedding) > 0,
                     "embedding_dimensions": len(test_embedding),
                     "available_models": health_status.get("available_models", []),
-                    "config": asdict(system_config)
+                    "config": asdict(system_config),
                 }
 
         except Exception as e:
@@ -334,7 +375,7 @@ class OllamaIntegrationHelper:
                 "success": False,
                 "error": f"Service Test fehlgeschlagen: {e}",
                 "health_status": health_status,
-                "model_status": model_status
+                "model_status": model_status,
             }
 
     @staticmethod
@@ -346,7 +387,7 @@ class OllamaIntegrationHelper:
             "Für Embeddings: nomic-embed-text oder andere spezialisierte Embedding-Modelle",  # Aktualisiert
             "Für Code-Generierung: codellama",
             "Überprüfe verfügbaren Speicher für größere Modelle",
-            "Konfiguriere OLLAMA_BASE_URL wenn Ollama nicht lokal läuft"
+            "Konfiguriere OLLAMA_BASE_URL wenn Ollama nicht lokal läuft",
         ]
 
 

@@ -5,28 +5,32 @@ Automatisiert die Installation und das Testen der Ollama-Integration
 """
 
 import asyncio
-import sys
 import subprocess
-from pathlib import Path
+import sys
+
 
 async def install_dependencies():
     """Installiere alle benötigten Python-Pakete"""
     print("📦 Installing Python dependencies...")
     try:
-        subprocess.run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"],
-                      check=True, capture_output=True, text=True)
+        subprocess.run(
+            [sys.executable, "-m", "pip", "install", "-r", "requirements.txt"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
         print("✅ Dependencies installed successfully")
         return True
     except subprocess.CalledProcessError as e:
         print(f"❌ Failed to install dependencies: {e.stderr}")
         return False
 
+
 async def check_ollama_installation():
     """Prüfe ob Ollama installiert ist"""
     print("🔍 Checking Ollama installation...")
     try:
-        result = subprocess.run(["ollama", "--version"],
-                              capture_output=True, text=True)
+        result = subprocess.run(["ollama", "--version"], capture_output=True, text=True)
         if result.returncode == 0:
             print(f"✅ Ollama installed: {result.stdout.strip()}")
             return True
@@ -37,14 +41,17 @@ async def check_ollama_installation():
         print("❌ Ollama not installed")
         return False
 
+
 async def install_ollama():
     """Installiere Ollama (nur auf Linux/macOS)"""
     print("🔄 Installing Ollama...")
     try:
         # Für macOS und Linux
-        result = subprocess.run([
-            "curl", "-fsSL", "https://ollama.ai/install.sh"
-        ], capture_output=True, text=True)
+        result = subprocess.run(
+            ["curl", "-fsSL", "https://ollama.ai/install.sh"],
+            capture_output=True,
+            text=True,
+        )
 
         if result.returncode == 0:
             subprocess.run(["sh"], input=result.stdout, text=True)
@@ -60,6 +67,7 @@ async def install_ollama():
         print("   Linux: curl -fsSL https://ollama.ai/install.sh | sh")
         print("   Windows: Download from https://ollama.ai/download")
         return False
+
 
 async def test_ollama_integration():
     """Teste die Ollama RAG Integration"""
@@ -80,7 +88,7 @@ async def test_ollama_integration():
         config = RAGConfig(
             llm_provider="ollama",
             ollama_model="nomic-embed-text:latest",
-            ollama_chat_model="llama3.1:8b"
+            ollama_chat_model="llama3.1:8b",
         )
 
         rag = OllamaRAGSystem(config)
@@ -110,6 +118,7 @@ async def test_ollama_integration():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         return False
+
 
 async def create_config_file():
     """Erstelle eine Beispiel-Konfigurationsdatei"""
@@ -145,6 +154,7 @@ ANTHROPIC_API_KEY=your_anthropic_key_here
         f.write(config_content)
 
     print("✅ Created config_example.env")
+
 
 async def main():
     """Haupt-Setup-Funktion"""
@@ -182,6 +192,7 @@ async def main():
         print("   3. Check the documentation in docs/")
     else:
         print("\n⚠️  Setup completed with issues. Check the error messages above.")
+
 
 if __name__ == "__main__":
     asyncio.run(main())

@@ -6,23 +6,23 @@ Zentrale Konfiguration mit Dependency Injection
 Einheitliche Konfigurationsverwaltung für das gesamte Smart RAG System
 """
 
-import os
 import logging
-from typing import Dict, Any, Optional, Type, TypeVar, Generic
+import os
 from dataclasses import dataclass, field
-from abc import ABC, abstractmethod
 from enum import Enum
+from typing import Any, Dict, Optional, Type, TypeVar
 
 # Lade .env automatisch
 try:
     from dotenv import load_dotenv
+
     load_dotenv()
 except ImportError:
     pass
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 class Environment(Enum):
@@ -34,6 +34,7 @@ class Environment(Enum):
 @dataclass
 class OllamaConfig:
     """Zentrale Ollama-Konfiguration"""
+
     base_url: str = "http://localhost:11434"
     model: str = "llama3.2:latest"
     embedding_model: str = "nomic-embed-text:latest"
@@ -48,6 +49,7 @@ class OllamaConfig:
 @dataclass
 class DatabaseConfig:
     """Zentrale Datenbank-Konfiguration"""
+
     # Neo4j
     neo4j_uri: str = "bolt://localhost:7687"
     neo4j_user: str = "neo4j"
@@ -56,7 +58,10 @@ class DatabaseConfig:
 
     # Vector Store
     vector_store_type: str = "chroma"
-    vector_store_path: str = "./data/vectors"
+    # Persist directory used by Chroma; set to ./chroma_db to match local sqlite
+    vector_store_path: str = "./chroma_db"
+    # Chroma backend implementation to use (sqlite or duckdb+parquet)
+    chroma_db_impl: str = "sqlite"
     collection_name: str = "rag_documents"
 
     # Graph Store
@@ -66,6 +71,7 @@ class DatabaseConfig:
 @dataclass
 class SystemConfig:
     """Zentrale System-Konfiguration"""
+
     environment: Environment = Environment.DEVELOPMENT
     debug: bool = False
     log_level: str = "INFO"
@@ -89,6 +95,7 @@ class SystemConfig:
 @dataclass
 class CentralConfig:
     """Zentrale Hauptkonfiguration - Single Source of Truth"""
+
     ollama: OllamaConfig = field(default_factory=OllamaConfig)
     database: DatabaseConfig = field(default_factory=DatabaseConfig)
     system: SystemConfig = field(default_factory=SystemConfig)
@@ -100,6 +107,11 @@ class CentralConfig:
 
     def _load_from_env(self):
         """Lädt alle Werte aus Umgebungsvariablen"""
+        # Debug: Umgebungsvariablen prüfen
+        print("NEO4J_URI aus env:", os.getenv("NEO4J_URI"))
+        print("NEO4J_USER aus env:", os.getenv("NEO4J_USER"))
+        print("NEO4J_PASSWORD aus env:", os.getenv("NEO4J_PASSWORD"))
+
         # System Configuration
         env_name = os.getenv("ENVIRONMENT", "development").lower()
         try:
@@ -113,39 +125,66 @@ class CentralConfig:
 
         # Ollama Configuration
         self.ollama.base_url = os.getenv("OLLAMA_BASE_URL", self.ollama.base_url)
-        self.ollama.model = os.getenv("LLM_MODEL", os.getenv("OLLAMA_MODEL", self.ollama.model))
-        self.ollama.embedding_model = os.getenv("EMBED_MODEL", os.getenv("OLLAMA_EMBEDDING_MODEL", self.ollama.embedding_model))
-        self.ollama.chat_model = os.getenv("ANALYZER_MODEL", os.getenv("OLLAMA_CHAT_MODEL", self.ollama.chat_model))
+        self.ollama.model = os.getenv(
+            "LLM_MODEL", os.getenv("OLLAMA_MODEL", self.ollama.model)
+        )
+        self.ollama.embedding_model = os.getenv(
+            "EMBED_MODEL",
+            os.getenv("OLLAMA_EMBEDDING_MODEL", self.ollama.embedding_model),
+        )
+        self.ollama.chat_model = os.getenv(
+            "ANALYZER_MODEL", os.getenv("OLLAMA_CHAT_MODEL", self.ollama.chat_model)
+        )
 
         # Parse numeric values safely
         try:
-            self.ollama.timeout = int(os.getenv("OLLAMA_TIMEOUT", str(self.ollama.timeout)))
+            self.ollama.timeout = int(
+                os.getenv("OLLAMA_TIMEOUT", str(self.ollama.timeout))
+            )
         except ValueError:
             pass
 
         try:
-            self.ollama.temperature = float(os.getenv("TEMPERATURE", str(self.ollama.temperature)))
+            self.ollama.temperature = float(
+                os.getenv("TEMPERATURE", str(self.ollama.temperature))
+            )
         except ValueError:
             pass
 
         try:
-            self.ollama.max_tokens = int(os.getenv("MAX_TOKENS", str(self.ollama.max_tokens)))
+            self.ollama.max_tokens = int(
+                os.getenv("MAX_TOKENS", str(self.ollama.max_tokens))
+            )
         except ValueError:
             pass
 
         # Database Configuration
         self.database.neo4j_uri = os.getenv("NEO4J_URI", self.database.neo4j_uri)
         self.database.neo4j_user = os.getenv("NEO4J_USER", self.database.neo4j_user)
-        self.database.neo4j_password = os.getenv("NEO4J_PASSWORD", self.database.neo4j_password)
+        self.database.neo4j_password = os.getenv(
+            "NEO4J_PASSWORD", self.database.neo4j_password
+        )
+        # Allow overriding the vector store type via environment variable
+        self.database.vector_store_type = os.getenv("VECTOR_STORE_TYPE", os.getenv("CHROMA_VECTOR_STORE_TYPE", self.database.vector_store_type))
+        # Optional overrides for vector store
+        self.database.vector_store_path = os.getenv("CHROMA_PERSIST_DIR", self.database.vector_store_path)
+        self.database.collection_name = os.getenv("CHROMA_COLLECTION", self.database.collection_name)
+        self.database.chroma_db_impl = os.getenv("CHROMA_DB_IMPL", self.database.chroma_db_impl)
 
         # Learning Configuration
         try:
-            self.system.learning_rate = float(os.getenv("LEARNING_RATE", str(self.system.learning_rate)))
+            self.system.learning_rate = float(
+                os.getenv("LEARNING_RATE", str(self.system.learning_rate))
+            )
         except ValueError:
             pass
 
         try:
-            self.system.optimization_interval = int(os.getenv("OPTIMIZATION_INTERVAL", str(self.system.optimization_interval)))
+            self.system.optimization_interval = int(
+                os.getenv(
+                    "OPTIMIZATION_INTERVAL", str(self.system.optimization_interval)
+                )
+            )
         except ValueError:
             pass
 
@@ -188,7 +227,9 @@ class CentralConfig:
 
         # Database Validation
         if self.database.enable_graph_store and not self.database.neo4j_password:
-            errors.append("Neo4j password ist erforderlich wenn Graph Store aktiviert ist")
+            errors.append(
+                "Neo4j password ist erforderlich wenn Graph Store aktiviert ist"
+            )
         if not self.database.vector_store_path:
             errors.append("Vector store path ist erforderlich")
 
@@ -203,36 +244,37 @@ class CentralConfig:
     def to_dict(self) -> Dict[str, Any]:
         """Konvertiert zu Dictionary für Serialisierung"""
         return {
-            'ollama': {
-                'base_url': self.ollama.base_url,
-                'model': self.ollama.model,
-                'embedding_model': self.ollama.embedding_model,
-                'chat_model': self.ollama.chat_model,
-                'timeout': self.ollama.timeout,
-                'temperature': self.ollama.temperature,
-                'max_tokens': self.ollama.max_tokens,
-                'max_retries': self.ollama.max_retries,
-                'auto_pull_models': self.ollama.auto_pull_models
+            "ollama": {
+                "base_url": self.ollama.base_url,
+                "model": self.ollama.model,
+                "embedding_model": self.ollama.embedding_model,
+                "chat_model": self.ollama.chat_model,
+                "timeout": self.ollama.timeout,
+                "temperature": self.ollama.temperature,
+                "max_tokens": self.ollama.max_tokens,
+                "max_retries": self.ollama.max_retries,
+                "auto_pull_models": self.ollama.auto_pull_models,
             },
-            'database': {
-                'neo4j_uri': self.database.neo4j_uri,
-                'neo4j_user': self.database.neo4j_user,
-                'neo4j_password': '***' if self.database.neo4j_password else None,
-                'vector_store_type': self.database.vector_store_type,
-                'vector_store_path': self.database.vector_store_path,
-                'collection_name': self.database.collection_name,
-                'enable_graph_store': self.database.enable_graph_store
+            "database": {
+                "neo4j_uri": self.database.neo4j_uri,
+                "neo4j_user": self.database.neo4j_user,
+                "neo4j_password": "***" if self.database.neo4j_password else None,
+                "vector_store_type": self.database.vector_store_type,
+                "vector_store_path": self.database.vector_store_path,
+                "collection_name": self.database.collection_name,
+                "chroma_db_impl": self.database.chroma_db_impl,
+                "enable_graph_store": self.database.enable_graph_store,
             },
-            'system': {
-                'environment': self.system.environment.value,
-                'debug': self.system.debug,
-                'log_level': self.system.log_level,
-                'data_path': self.system.data_path,
-                'enable_caching': self.system.enable_caching,
-                'enable_monitoring': self.system.enable_monitoring,
-                'learning_rate': self.system.learning_rate,
-                'optimization_interval': self.system.optimization_interval
-            }
+            "system": {
+                "environment": self.system.environment.value,
+                "debug": self.system.debug,
+                "log_level": self.system.log_level,
+                "data_path": self.system.data_path,
+                "enable_caching": self.system.enable_caching,
+                "enable_monitoring": self.system.enable_monitoring,
+                "learning_rate": self.system.learning_rate,
+                "optimization_interval": self.system.optimization_interval,
+            },
         }
 
 
@@ -251,7 +293,9 @@ def get_config() -> CentralConfig:
         if errors:
             logger.warning(f"Konfigurationsfehler gefunden: {', '.join(errors)}")
 
-        logger.info(f"Zentrale Konfiguration geladen: {_global_config.system.environment.value}")
+        logger.info(
+            f"Zentrale Konfiguration geladen: {_global_config.system.environment.value}"
+        )
 
     return _global_config
 
@@ -277,17 +321,19 @@ class DIContainer:
         self.register_instance(DatabaseConfig, self._config.database)
         self.register_instance(SystemConfig, self._config.system)
 
-    def register_instance(self, interface: Type[T], instance: T) -> 'DIContainer':
+    def register_instance(self, interface: Type[T], instance: T) -> "DIContainer":
         """Registriert eine Instanz"""
         self._services[interface] = instance
         return self
 
-    def register_factory(self, interface: Type[T], factory: callable) -> 'DIContainer':
+    def register_factory(self, interface: Type[T], factory: callable) -> "DIContainer":
         """Registriert eine Factory-Funktion"""
         self._factories[interface] = factory
         return self
 
-    def register_singleton(self, interface: Type[T], implementation: Type[T]) -> 'DIContainer':
+    def register_singleton(
+        self, interface: Type[T], implementation: Type[T]
+    ) -> "DIContainer":
         """Registriert als Singleton"""
         if interface not in self._services:
             instance = self._create_instance(implementation)
@@ -314,7 +360,7 @@ class DIContainer:
         kwargs = {}
 
         for name, param in signature.parameters.items():
-            if name == 'self':
+            if name == "self":
                 continue
 
             if param.annotation != inspect.Parameter.empty:
@@ -324,7 +370,9 @@ class DIContainer:
                     if param.default != inspect.Parameter.empty:
                         kwargs[name] = param.default
                     else:
-                        raise ValueError(f"Cannot resolve dependency {param.annotation} for {implementation}")
+                        raise ValueError(
+                            f"Cannot resolve dependency {param.annotation} for {implementation}"
+                        )
             elif param.default != inspect.Parameter.empty:
                 kwargs[name] = param.default
 
@@ -366,7 +414,9 @@ def inject(func):
                     kwargs[name] = container.resolve(param.annotation)
                 except ValueError:
                     if param.default == inspect.Parameter.empty:
-                        raise ValueError(f"Cannot inject {param.annotation} into {func.__name__}")
+                        raise ValueError(
+                            f"Cannot inject {param.annotation} into {func.__name__}"
+                        )
 
         return func(*args, **kwargs)
 
@@ -383,14 +433,20 @@ def configure_logging(config: SystemConfig = None):
 
     logging.basicConfig(
         level=level,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.StreamHandler(),
-            logging.FileHandler(f"{config.data_path}/system.log")
-        ] if config.debug else [logging.StreamHandler()]
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        handlers=(
+            [
+                logging.StreamHandler(),
+                logging.FileHandler(f"{config.data_path}/system.log"),
+            ]
+            if config.debug
+            else [logging.StreamHandler()]
+        ),
     )
 
-    logger.info(f"Logging konfiguriert: Level={config.log_level}, Environment={config.environment.value}")
+    logger.info(
+        f"Logging konfiguriert: Level={config.log_level}, Environment={config.environment.value}"
+    )
 
 
 def print_config_summary():
@@ -404,7 +460,7 @@ def print_config_summary():
     print(f"📊 Debug Mode: {config.system.debug}")
     print(f"📝 Log Level: {config.system.log_level}")
 
-    print(f"\n🤖 Ollama Configuration:")
+    print("\n🤖 Ollama Configuration:")
     print(f"   Base URL: {config.ollama.base_url}")
     print(f"   Model: {config.ollama.model}")
     print(f"   Embedding Model: {config.ollama.embedding_model}")
@@ -412,26 +468,30 @@ def print_config_summary():
     print(f"   Temperature: {config.ollama.temperature}")
     print(f"   Auto Pull: {config.ollama.auto_pull_models}")
 
-    print(f"\n🗄️ Database Configuration:")
+    print("\n🗄️ Database Configuration:")
     print(f"   Neo4j URI: {config.database.neo4j_uri}")
-    print(f"   Graph Store: {'Enabled' if config.database.enable_graph_store else 'Disabled'}")
+    print(
+        f"   Graph Store: {'Enabled' if config.database.enable_graph_store else 'Disabled'}"
+    )
     print(f"   Vector Store: {config.database.vector_store_type}")
     print(f"   Vector Path: {config.database.vector_store_path}")
 
-    print(f"\n⚙️ System Configuration:")
+    print("\n⚙️ System Configuration:")
     print(f"   Caching: {'Enabled' if config.system.enable_caching else 'Disabled'}")
-    print(f"   Monitoring: {'Enabled' if config.system.enable_monitoring else 'Disabled'}")
+    print(
+        f"   Monitoring: {'Enabled' if config.system.enable_monitoring else 'Disabled'}"
+    )
     print(f"   Learning Rate: {config.system.learning_rate}")
     print(f"   Data Path: {config.system.data_path}")
 
     # Validierung
     errors = config.validate()
     if errors:
-        print(f"\n⚠️ Konfigurationsfehler:")
+        print("\n⚠️ Konfigurationsfehler:")
         for error in errors:
             print(f"   • {error}")
     else:
-        print(f"\n✅ Konfiguration ist valid")
+        print("\n✅ Konfiguration ist valid")
 
 
 if __name__ == "__main__":

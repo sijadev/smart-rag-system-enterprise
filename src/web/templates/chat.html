@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Rag System</title>
+    <link rel="stylesheet" href="/static/css/chat.css">
+    <style>
+    .spinner {
+        width: 48px;
+        height: 48px;
+        border: 6px solid #e5e5e5;
+        border-top: 6px solid #2563eb;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin: auto;
+    }
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    /* Einstellungen Modal spezifische Stile */
+    /* Modal backdrop: wenn versteckt, darf es keine Klicks blockieren */
+    #settings-modal {
+        display: none; /* sichtbar nur wenn .open gesetzt wird */
+        pointer-events: none; /* verhindert, dass unsichtbares Overlay Klicks blockiert */
+        position: fixed;
+        inset: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(0, 0, 0, 0.25);
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+    }
+    /* Klasse zum Öffnen des Modals - erlaubt Interaktion */
+    #settings-modal.open {
+        display: flex;
+        pointer-events: auto;
+    }
+
+    /* macOS Dark Theme */
+    body {
+        background: #1e1e1e;
+        color: #e0e0e0;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    }
+    .app-container {
+        background: #232323;
+        color: #e0e0e0;
+    }
+    .sidebar {
+        background: #232323;
+        color: #e0e0e0;
+        border-right: 1px solid #333;
+        min-width: 220px;
+        max-width: 320px;
+        height: 100vh;
+        overflow-y: auto;
+    }
+    .sidebar-header {
+        background: #232323;
+        color: #e0e0e0;
+        border-bottom: 1px solid #333;
+    }
+    .chat-history {
+        background: #232323;
+        color: #e0e0e0;
+        padding: 16px 0 0 0;
+    }
+    .main-content {
+        background: #1e1e1e;
+        color: #e0e0e0;
+    }
+    .header {
+        background: #232323;
+        color: #e0e0e0;
+        border-bottom: 1px solid #333;
+    }
+    .logo {
+        color: #e0e0e0;
+        font-weight: 600;
+    }
+    .header-actions .btn, .header-actions .btn-primary {
+        background: #333;
+        color: #e0e0e0;
+        border: none;
+        border-radius: 6px;
+        padding: 6px 16px;
+        margin-left: 8px;
+        transition: background 0.2s;
+    }
+    .header-actions .btn:hover, .header-actions .btn-primary:hover {
+        background: #444;
+    }
+    #settings-modal > div {
+        background: #232323 !important;
+        color: #e0e0e0 !important;
+        box-shadow: 0 4px 32px rgba(0,0,0,0.5) !important;
+    }
+    #settings-modal label, #settings-modal h2 {
+        color: #e0e0e0 !important;
+    }
+    #settings-modal input, #settings-modal select {
+        background: #1e1e1e;
+        color: #e0e0e0;
+        border: 1px solid #444;
+        border-radius: 4px;
+        padding: 4px 8px;
+    }
+    #settings-modal .btn {
+        background: #333;
+        color: #e0e0e0;
+        border: none;
+        border-radius: 6px;
+        padding: 6px 16px;
+    }
+    #settings-modal .btn-primary {
+        background: #2563eb;
+        color: #fff;
+    }
+    .chat-container {
+        background: #232323;
+        color: #e0e0e0;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    .input-container {
+        background: #232323;
+        color: #e0e0e0;
+        border-top: 1px solid #333;
+    }
+    .input-wrapper textarea {
+        background: #1e1e1e;
+        color: #e0e0e0;
+        border: 1px solid #444;
+        border-radius: 6px;
+        padding: 8px;
+        width: 100%;
+    }
+    .input-wrapper .btn-primary {
+        background: #2563eb;
+        color: #fff;
+        border: none;
+        border-radius: 6px;
+        padding: 6px 16px;
+    }
+    .import-message, .user-message, .llm-message {
+        background: #232323;
+        color: #e0e0e0;
+        border-radius: 6px;
+        margin: 8px 0;
+        padding: 10px 16px;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+    }
+    .user-message {
+        background: #2563eb;
+        color: #fff;
+        align-self: flex-end;
+    }
+    .llm-message {
+        background: #333;
+        color: #e0e0e0;
+        align-self: flex-start;
+    }
+    .import-message.success {
+        background: #2e7d32;
+        color: #fff;
+    }
+    .import-message.error {
+        background: #c62828;
+        color: #fff;
+    }
+    .import-message.info {
+        background: #333;
+        color: #e0e0e0;
+    }
+    .import-panel {
+        background: #232323;
+        color: #e0e0e0;
+        border-bottom: 1px solid #333;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        padding: 20px;
+        margin-bottom: 0;
+    }
+    .import-panel label {
+        color: #e0e0e0;
+        font-weight: 500;
+    }
+    .import-panel input[type="file"] {
+        background: #1e1e1e;
+        color: #e0e0e0;
+        border: 1px solid #444;
+        border-radius: 4px;
+        padding: 4px 8px;
+    }
+    .import-panel .btn {
+        background: #2563eb;
+        color: #fff;
+        border: none;
+        border-radius: 6px;
+        padding: 6px 16px;
+        margin-left: 8px;
+        transition: background 0.2s;
+    }
+    .import-panel .btn:hover {
+        background: #1a48b6;
+    }
+    #import-result {
+        color: #90caf9;
+        font-size: 15px;
+        margin-top: 10px;
+    }
+    ::selection {
+        background: #2563eb;
+        color: #fff;
+    }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <aside class="sidebar">
+            <!-- Abstandhalter für mehr Platz oben -->
+            <div style="height: 120px;"></div>
+            <!-- Status-Anzeige für DB und LLM -->
+            <div class="sidebar-status" style="padding:20px 16px 8px 16px;">
+                <div style="margin-bottom:12px;">
+                    <span style="font-size:15px;font-weight:500;">Datenbanken:</span>
+                </div>
+                <div style="margin-bottom:4px;">
+                    <span id="sidebar-neo4j-status" style="font-weight:600;color:#90caf9;">Neo4j</span>
+                    <span id="sidebar-neo4j-connection" style="margin-left:8px;font-size:13px;color:#2e7d32;">-</span>
+                </div>
+                <div style="margin-bottom:16px;">
+                    <span id="sidebar-db-status" style="font-weight:600;color:#90caf9;">Qdrant</span>
+                    <span id="sidebar-db-connection" style="margin-left:8px;font-size:13px;color:#2e7d32;">Verbunden</span>
+                </div>
+                <div>
+                    <span style="font-weight:600;color:#90caf9;">LLM:</span>
+                    <span id="sidebar-llm-status" style="margin-left:8px;font-size:13px;color:#2e7d32;">verbunden (nomic-embed-text:latest, llama3.2:latest, llama3.1:8b)</span>
+                </div>
+            </div>
+            <div class="chat-history">
+                <!-- Chat-Historie wird hier angezeigt -->
+            </div>
+        </aside>
+        <main class="main-content">
+            <header class="header">
+                <div class="logo">Smart Rag System</div>
+                <div class="header-actions">
+                    <a href="#" class="btn" id="open-settings-btn">Einstellungen</a>
+                    <a href="#" class="btn btn-primary">Feedback</a>
+                    <div id="processing-time" style="margin-left:16px;font-size:13px;color:#6b7280;display:inline-block;"></div>
+                </div>
+            </header>
+            <!-- Settings Modal (versteckt, wird per Button geöffnet) -->
+            <div id="settings-modal">
+                <div style="background:#fff;padding:32px 24px;border-radius:12px;min-width:400px;max-width:90vw;box-shadow:0 4px 32px rgba(0,0,0,0.15);margin:auto;">
+                    <h2 style="margin-top:0;margin-bottom:24px;">Einstellungen</h2>
+                    <form id="settings-form">
+                        <div style="margin-bottom:16px;">
+                            <label for="db-select-modal"><b>Datenbank:</b></label>
+                            <select id="db-select-modal">
+                                <option value="qdrant">Qdrant</option>
+                                <option value="neo4j">Neo4j</option>
+                            </select>
+                        </div>
+                        <div style="margin-bottom:16px;">
+                            <label for="llm-select-modal"><b>LLM:</b></label>
+                            <select id="llm-select-modal">
+                                <option value="ollama">Ollama</option>
+                                <option value="local">Lokales Modell</option>
+                            </select>
+                        </div>
+                        <div style="margin-bottom:16px;">
+                            <label for="strategy-select-modal"><b>Strategie:</b></label>
+                            <select id="strategy-select-modal">
+                                <option value="hybrid">Hybrid (Vektor + Graph)</option>
+                                <option value="vector">Nur Vektor</option>
+                                <option value="graph">Nur Graph</option>
+                            </select>
+                        </div>
+                        <div style="margin-bottom:16px;">
+                            <label for="chunk-size-modal"><b>Chunk-Größe:</b></label>
+                            <input type="number" id="chunk-size-modal" min="100" max="2000" value="500" style="width:80px;">
+                        </div>
+                        <div style="margin-bottom:16px;">
+                            <label for="chunk-overlap-modal"><b>Überlappung:</b></label>
+                            <input type="number" id="chunk-overlap-modal" min="0" max="500" value="50" style="width:80px;">
+                        </div>
+                        <div style="margin-bottom:16px;">
+                            <label for="similarity-threshold-modal"><b>Ähnlichkeits-Schwellwert:</b></label>
+                            <input type="number" id="similarity-threshold-modal" min="0.1" max="0.9" step="0.01" value="0.5" style="width:80px;">
+                        </div>
+                        <div style="margin-bottom:16px;">
+                            <label for="max-connections-modal"><b>Max. Verbindungen/Chunk:</b></label>
+                            <input type="number" id="max-connections-modal" min="1" max="10" value="3" style="width:80px;">
+                        </div>
+                        <div style="display:flex;gap:16px;justify-content:flex-end;margin-top:32px;">
+                            <button type="button" id="settings-cancel" class="btn">Abbrechen</button>
+                            <button type="submit" id="settings-save" class="btn btn-primary">Speichern</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <!-- Dokumentenimport-Bereich -->
+            <div class="import-panel">
+                <label for="import-file"><b>Dokument importieren:</b></label>
+                <input type="file" id="import-file" style="margin-right:10px;">
+                <button id="import-btn" class="btn">Importieren</button>
+                <div id="import-result"></div>
+            </div>
+            <div class="chat-container">
+                <!-- Hier werden die Import- und Chat-Nachrichten angezeigt -->
+                <div id="chat-messages"></div>
+                <div id="import-spinner" style="display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:10;">
+                    <div class="spinner"></div>
+                </div>
+            </div>
+            <div class="input-container">
+                <div class="input-wrapper">
+                    <textarea class="message-input" placeholder="Nachricht eingeben..."></textarea>
+                    <div style="position:relative;">
+                        <button class="btn btn-primary" id="send-btn" style="position:absolute;right:10px;top:10px;">Senden</button>
+                    </div>
+                    <div style="margin-top:8px; display:flex; gap:12px; align-items:center;">
+                        <label style="font-size:13px; color:#6b7280;"><input type="checkbox" id="realtime-toggle"> Echtzeit (WebSocket)</label>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    <script src="/static/js/chat.js"></script>
+    <script>
+    (function(){
+        const ids = {
+            neo4j: 'sidebar-neo4j-connection',
+            qdrant: 'sidebar-db-connection',
+            llm: 'sidebar-llm-status'
+        };
+
+        const setStatus = (el, ok) => {
+            if(!el) return;
+            el.textContent = ok ? 'Verbunden' : 'Fehlt';
+            el.style.color = ok ? '#10b981' : '#ef4444';
+        };
+
+        const showToast = (msg) => {
+            let toast = document.getElementById('status-toast');
+            if(!toast){
+                toast = document.createElement('div');
+                toast.id = 'status-toast';
+                Object.assign(toast.style, {
+                    position: 'fixed',
+                    right: '20px',
+                    top: '20px',
+                    background: '#111827',
+                    color: '#e5e7eb',
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    boxShadow: '0 6px 24px rgba(0,0,0,0.5)',
+                    zIndex: 2000,
+                    opacity: '0',
+                    transition: 'opacity 200ms ease-in-out'
+                });
+                document.body.appendChild(toast);
+            }
+            toast.textContent = msg;
+            requestAnimationFrame(()=>{ toast.style.opacity = '1'; });
+            clearTimeout(toast._hide);
+            toast._hide = setTimeout(()=>{ toast.style.opacity = '0'; }, 5000);
+        };
+
+        const parseDomState = ()=>{
+            const out = {};
+            Object.entries(ids).forEach(([k,id])=>{
+                const el = document.getElementById(id);
+                if(!el){ out[k]=false; return; }
+                const txt = (el.textContent||'').toLowerCase();
+                out[k] = /verbund|connected|ok|online/.test(txt);
+            });
+            return out;
+        };
+
+        const fetchStatus = async (timeoutMs=2500)=>{
+            try{
+                const controller = new AbortController();
+                const id = setTimeout(()=>controller.abort(), timeoutMs);
+                const res = await fetch('/api/status', { signal: controller.signal });
+                clearTimeout(id);
+                if(!res.ok) return null;
+                const json = await res.json();
+                return { neo4j: !!json.neo4j, qdrant: !!json.qdrant, llm: !!json.llm };
+            }catch(e){ return null; }
+        };
+
+        document.addEventListener('DOMContentLoaded', async ()=>{
+            let known = null;
+
+            // Start check: try API, otherwise derive from DOM once
+            const api = await fetchStatus();
+            if(api){ known = api; Object.keys(api).forEach(k=> setStatus(document.getElementById(ids[k]), api[k])); }
+            else { known = parseDomState(); Object.keys(known).forEach(k=> setStatus(document.getElementById(ids[k]), known[k])); }
+
+            // MutationObserver: beobachte nur Sidebar-Status-Bereich und reagiere auf tatsächliche Änderungen
+            const container = document.querySelector('.sidebar-status');
+            if(!container) return;
+            let lastNotify = 0;
+            const MIN_INTERVAL = 15000; // 15s Debounce
+
+            const checkAndNotify = async (fromApiIfAvailable=false)=>{
+                const now = Date.now();
+                if(now - lastNotify < MIN_INTERVAL) return;
+
+                // Prefer structured API if available
+                let state = null;
+                if(fromApiIfAvailable) state = await fetchStatus();
+                if(!state) state = parseDomState();
+
+                ['neo4j','qdrant','llm'].forEach(k=>{
+                    if(known == null || state[k] !== known[k]){
+                        setStatus(document.getElementById(ids[k]), !!state[k]);
+                        const human = k === 'qdrant' ? 'Qdrant' : (k === 'neo4j' ? 'Neo4j' : 'LLM');
+                        const msg = state[k] ? `${human} verbunden` : `${human} Verbindung verloren`;
+                        showToast(msg);
+                    }
+                });
+                known = state;
+                lastNotify = now;
+            };
+
+            const observer = new MutationObserver((mutations)=>{
+                // on DOM change, try to get structured API state, but ensure debounce
+                checkAndNotify(true).catch(()=>{});
+            });
+            observer.observe(container, { childList: true, subtree: true, characterData: true });
+
+            // Rare polling fallback to recover from missed events (e.g. 5 minutes)
+            setInterval(()=>{ checkAndNotify(true).catch(()=>{}); }, 5*60*1000);
+
+            // Manual retry on Qdrant label
+            const retryEl = document.getElementById(ids.qdrant);
+            if(retryEl){ retryEl.style.cursor='pointer'; retryEl.title='Klicken zum erneuten Prüfen'; retryEl.addEventListener('click', ()=> checkAndNotify(true)); }
+        });
+    })();
+    </script>
+    <!-- Debug-Skript: prüft, ob Overlays oder disabled-Attribute Klicks blockieren; hebt Probleme hervor und erlaubt temporär Klicks -->
+    <script>
+    (function(){
+        document.addEventListener('DOMContentLoaded', ()=>{
+            try{
+                const disabled = Array.from(document.querySelectorAll('button[disabled],a[disabled],input[disabled]'));
+                console.log('[debug] disabled elements:', disabled);
+
+                // Suche nach Elementen, die das Viewport vollständig überdecken
+                const overlays = Array.from(document.body.querySelectorAll('*')).filter(el=>{
+                    if(el === document.body) return false;
+                    const style = getComputedStyle(el);
+                    if(style.display === 'none' || style.visibility === 'hidden' || style.pointerEvents === 'none') return false;
+                    const r = el.getBoundingClientRect();
+                    const covers = r.width >= window.innerWidth - 1 && r.height >= window.innerHeight - 1 && r.top <= 0 && r.left <= 0;
+                    return covers;
+                });
+                console.log('[debug] potential overlays:', overlays);
+
+                overlays.forEach(el=>{
+                    // Sichtbar hervorheben
+                    el.style.outline = '4px solid rgba(255,0,0,0.9)';
+                    el.style.boxShadow = 'inset 0 0 0 9999px rgba(255,0,0,0.05)';
+                    // temporär Klicks durchlassen, damit UI testbar ist
+                    el._oldPointer = el.style.pointerEvents;
+                    el.style.pointerEvents = 'none';
+                    console.warn('[debug] overlay temporarily disabled for testing:', el);
+                    setTimeout(()=>{
+                        el.style.pointerEvents = el._oldPointer || '';
+                        el.style.outline = '';
+                        el.style.boxShadow = '';
+                    }, 5000);
+                });
+
+                // Force-enable buttons for quick testing
+                Array.from(document.querySelectorAll('button, .btn, a.btn')).forEach(b=>{
+                    b.style.pointerEvents = 'auto';
+                });
+                console.log('[debug] buttons force-enabled for testing');
+            }catch(e){ console.error('[debug] error during overlay check', e); }
+        });
+    })();
+    </script>
+    <script>
+    // Modal open/close wiring
+    (function(){
+        document.addEventListener('DOMContentLoaded', ()=>{
+            const openBtn = document.getElementById('open-settings-btn');
+            const modal = document.getElementById('settings-modal');
+            const cancel = document.getElementById('settings-cancel');
+            if(!modal || !openBtn) return;
+            openBtn.addEventListener('click', (e)=>{ e.preventDefault(); modal.classList.add('open'); });
+            if(cancel) cancel.addEventListener('click', ()=> modal.classList.remove('open'));
+            // click on backdrop to close
+            modal.addEventListener('click', (e)=>{ if(e.target === modal) modal.classList.remove('open'); });
+            // ESC to close
+            document.addEventListener('keydown', (e)=>{ if(e.key === 'Escape') modal.classList.remove('open'); });
+        });
+    })();
+    </script>
+</body>
+</html>

@@ -2,13 +2,14 @@
 # Author: simon janke
 # Date: 01.09.25
 # !/usr/bin/env python3
+import os
 import subprocess
 import sys
-import os
-import json
 import time
 from pathlib import Path
+
 import requests
+
 import docker
 
 
@@ -62,7 +63,7 @@ class RAGSystemSetup:
             "logs",
             "config",
             "tests",
-            "docker"
+            "docker",
         ]
 
         for dir_name in directories:
@@ -239,9 +240,10 @@ docker>=6.0.0
         print("📦 Installing Python dependencies...")
 
         try:
-            subprocess.run([
-                sys.executable, "-m", "pip", "install", "-r", "requirements.txt"
-            ], check=True)
+            subprocess.run(
+                [sys.executable, "-m", "pip", "install", "-r", "requirements.txt"],
+                check=True,
+            )
 
             print("✅ Dependencies installed successfully")
 
@@ -259,8 +261,11 @@ docker>=6.0.0
         for model in models:
             print(f"📥 Downloading {model}...")
             try:
-                subprocess.run(["docker", "exec", "rag_ollama", "ollama", "pull", model],
-                               check=True, capture_output=True)
+                subprocess.run(
+                    ["docker", "exec", "rag_ollama", "ollama", "pull", model],
+                    check=True,
+                    capture_output=True,
+                )
                 print(f"✅ {model} downloaded successfully")
             except subprocess.CalledProcessError:
                 print(f"❌ Failed to download {model}")
@@ -269,7 +274,9 @@ docker>=6.0.0
         try:
             result = subprocess.run(
                 ["docker", "exec", "rag_ollama", "ollama", "list"],
-                capture_output=True, text=True, check=True
+                capture_output=True,
+                text=True,
+                check=True,
             )
             print("📋 Available models:")
             print(result.stdout)
@@ -319,7 +326,8 @@ if __name__ == "__main__":
         with open(self.project_dir / "initialize.py", "w") as f:
             f.write(init_script)
 
-        # Copy main system files (these would normally be the artifacts we created)
+        # Copy main system files (these would normally be the artifacts we
+        # created)
         print("📁 Setting up system files...")
         # In real implementation, copy the RAG system files here
 
@@ -398,7 +406,7 @@ def main():
     print("-" * 50)
 
     response = input("Continue with setup? (y/N): ")
-    if response.lower() != 'y':
+    if response.lower() != "y":
         print("Setup cancelled.")
         return
 
