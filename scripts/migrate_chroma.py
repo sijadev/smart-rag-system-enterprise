@@ -12,12 +12,12 @@ The script will:
 This is defensive and logs progress.
 """
 import argparse
+import json
 import os
 import sqlite3
-import json
 import sys
 import traceback
-from typing import List, Tuple, Optional
+from typing import List, Optional, Tuple
 
 
 def read_legacy(db_path: str) -> Tuple[List[dict], List[Optional[List[float]]]]:

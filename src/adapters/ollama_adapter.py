@@ -5,10 +5,10 @@ Provides a best-effort async implementation for generate() and embed().
 If Ollama HTTP API is available, httpx is used. Otherwise falls back to the
 'ollama' CLI via asyncio.to_thread subprocess calls.
 """
-from typing import Any, Dict, List, Optional
-import os
 import asyncio
 import json
+import os
+from typing import Any, Dict, List, Optional
 
 from src.interfaces import ILLMService
 

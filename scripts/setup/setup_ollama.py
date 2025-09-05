@@ -74,7 +74,8 @@ async def test_ollama_integration():
     print("\n🧪 Testing Ollama RAG Integration...")
 
     try:
-        from src.rag_system import OllamaRAGSystem, RAGConfig, setup_ollama_models
+        from src.rag_system import (OllamaRAGSystem, RAGConfig,
+                                    setup_ollama_models)
 
         # Setup Modelle
         print("🔄 Setting up required models...")

@@ -12,8 +12,10 @@ from typing import Optional
 from . import bootstrap
 from .config.builders import RAGSystemConfig
 from .di_container import DIContainer
-from .factories import DatabaseFactory, LLMServiceFactory, RetrievalStrategyFactory
-from .interfaces import IGraphStore, IVectorStore, QueryContext, RetrievalStrategy
+from .factories import (DatabaseFactory, LLMServiceFactory,
+                        RetrievalStrategyFactory)
+from .interfaces import (IGraphStore, IVectorStore, QueryContext,
+                         RetrievalStrategy)
 
 
 class SmartRAGSystem:
@@ -116,7 +118,8 @@ class SmartRAGSystem:
                     self.container.register_instance(IGraphStore, self.graph_store)
                 except Exception:
                     try:
-                        from src.adapters.mock_graph_store import MockGraphStore
+                        from src.adapters.mock_graph_store import \
+                            MockGraphStore
 
                         self.graph_store = MockGraphStore({})
                         self.container.register_instance(IGraphStore, self.graph_store)

@@ -6,6 +6,7 @@ import numpy as np
 # Lade .env-Datei automatisch
 try:
     from dotenv import load_dotenv
+
     # Lade .env explizit aus dem Projekt-Root
     env_path = os.path.join(os.path.dirname(__file__), ".env")
     load_dotenv(env_path)
@@ -20,16 +21,17 @@ except ImportError:
 # src.bootstrap.register_all_defaults() explicitly. By default we avoid
 # side-effects on module import.
 
-from src.rag_system import AdvancedRAGSystem, RAGConfig
-from src.self_learning_rag import LearningConfig, SelfLearningRAGSystem
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse
-from typing import List
 import uuid
 from datetime import datetime
+from typing import List
 
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+
+from src.rag_system import AdvancedRAGSystem, RAGConfig
+from src.self_learning_rag import LearningConfig, SelfLearningRAGSystem
 
 # FastAPI App für UI
 app = FastAPI(title="Claude-like Chat UI")

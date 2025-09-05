@@ -21,6 +21,7 @@ except ImportError as e:
 # Import from our actual pipeline
 try:
     from fast_import_pipeline import FastImportPipeline
+
     from fast_import_pipeline_neo4j import FastImportPipelineNeo4j
 
     PIPELINE_AVAILABLE = True

@@ -1,15 +1,16 @@
-from fastapi import Request, Body, Depends, HTTPException, status, Header
-from fastapi.responses import StreamingResponse, JSONResponse
+import asyncio
+import concurrent.futures
+import json
+import os
+import socket
+import threading
+import time
+from urllib.parse import urlparse
+
+from fastapi import Body, Depends, Header, HTTPException, Request, status
+from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-import os
-import asyncio
-import json
-import socket
-from urllib.parse import urlparse
-import threading
-import concurrent.futures
-import time
 
 from src.web.app import app
 
@@ -202,6 +203,7 @@ def get_status():
     def check_http_fallback(url: str) -> bool:
         try:
             import requests
+
             # versuche zuerst die gegebene URL
             try:
                 r = requests.get(url, timeout=1)

@@ -5,8 +5,8 @@ Lightweight adapter: uses neo4j-driver when available, otherwise provides an in-
 fallback implementation compatible with IGraphStore for testing and bootstrapping.
 """
 
-import os
 import json
+import os
 from typing import Any, Dict, List, Optional
 
 from ..interfaces import IGraphStore
@@ -29,7 +29,7 @@ class Neo4jAdapter(IGraphStore):
                     "neo4j_password": getattr(central_db, "neo4j_password", None),
                     "database": getattr(central_db, "neo4j_database", None),
                 }
-            except Exception as e:
+            except Exception:
                 config = {}
         self.config = config or {}
         import logging

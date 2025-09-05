@@ -4,18 +4,18 @@
 Single orchestrator that uses a vector store adapter (default: Qdrant) and Neo4jAdapter via central_config.
 Supports modes: 'qdrant_only', 'neo4j_only', 'both'.
 """
-from src.adapters.qdrant_adapter import QdrantAdapter
+import logging
+import os
+import pathlib
+import sys
+from dataclasses import dataclass
+from typing import Dict, List, Optional, Tuple
+
+import numpy as np
+from PyPDF2 import PdfReader
+
 from src.adapters.neo4j_adapter import Neo4jAdapter
 from src.central_config import get_config
-from PyPDF2 import PdfReader
-from typing import List, Tuple, Optional, Dict
-import os
-import logging
-import numpy as np
-from dataclasses import dataclass
-
-import sys
-import pathlib
 
 # Ensure project root is on sys.path so `from src...` imports work when
 # running this file as a script (python3 src/pipelines/import_orchestrator.py).
@@ -248,6 +248,7 @@ class ImportOrchestrator:
                 metas = [{"page_number": c.page_number, "chunk_index": c.chunk_index, "connections": ",".join(c.connections)} for c in chunks]
                 emb = [c.embeddings.tolist() for c in chunks]
                 import asyncio
+
                 # Prefer async add_documents signature: (documents, metadatas, embeddings)
                 if hasattr(self.vector_store, 'add_documents'):
                     asyncio.get_event_loop().run_until_complete(self.vector_store.add_documents(docs, metas, emb))
@@ -260,6 +261,7 @@ class ImportOrchestrator:
         # store graph
         if self.mode in ("both", "neo4j_only") and self.neo4j is not None:
             import asyncio
+
             # create document node + chunks and relations
             neo_chunks = []
             for c in chunks:

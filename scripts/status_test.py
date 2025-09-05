@@ -11,12 +11,13 @@ Der Client startet zwei Threads:
 """
 
 import argparse
-import threading
-import time
 import json
 import sys
+import threading
+import time
 
 import requests
+
 try:
     from sseclient import SSEClient
 except Exception:

@@ -1,10 +1,13 @@
-from .factories import DatabaseFactory, LLMServiceFactory, RetrievalStrategyFactory
-from .interfaces import LLMProvider, RetrievalStrategy
-from src.di_container import register_singleton, get_container
-from src.interfaces import IVectorStore, IGraphStore, ILLMService
 import asyncio
-import os
 import logging
+import os
+
+from src.di_container import get_container, register_singleton
+from src.interfaces import IGraphStore, ILLMService, IVectorStore
+
+from .factories import (DatabaseFactory, LLMServiceFactory,
+                        RetrievalStrategyFactory)
+from .interfaces import LLMProvider, RetrievalStrategy
 
 # Import adapters lazily to avoid heavy external deps at module import time
 
@@ -107,7 +110,8 @@ def register_all_defaults():
         embedder_callable = None
         if use_local_emb:
             try:
-                from src.embeddings.sentence_transformer import SentenceTransformerEmbedder
+                from src.embeddings.sentence_transformer import \
+                    SentenceTransformerEmbedder
 
                 st = SentenceTransformerEmbedder()
                 # embed_texts returns List[List[float]] asynchronously; provide a sync wrapper

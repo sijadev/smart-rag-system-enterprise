@@ -6,8 +6,8 @@ Neo4j Graph Store Implementation für Smart RAG System
 Echte Neo4j-Integration mit APOC-Plugin-Support
 """
 
-import logging
 import json
+import logging
 from datetime import datetime
 from typing import Any, Dict, List
 

@@ -4,9 +4,9 @@
 Nicht-invasiv: fügt grundlegende DI-Funktionalität hinzu ohne bestehende Logik zu ändern.
 """
 
+import threading
 from contextlib import contextmanager
 from typing import Any, Callable, Dict, Optional
-import threading
 
 
 class DIContainer:

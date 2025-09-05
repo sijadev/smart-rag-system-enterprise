@@ -13,13 +13,8 @@ import sys
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from src.central_config import (
-    CentralConfig,
-    configure_logging,
-    get_config,
-    get_container,
-    print_config_summary,
-)
+from src.central_config import (CentralConfig, configure_logging, get_config,
+                                get_container, print_config_summary)
 from src.interfaces import ILLMService, QueryContext
 from src.modern_factory import register_llm_services
 

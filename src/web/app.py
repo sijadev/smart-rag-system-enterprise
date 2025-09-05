@@ -1,27 +1,27 @@
-from src.adapters.ollama_adapter import OllamaAdapter
-from src.adapters.qdrant_adapter import QdrantAdapter
-from src.adapters.neo4j_adapter import Neo4jAdapter
-from typing import List, Optional
-import json
-import time
-import io
-import contextlib
-import logging
 import asyncio
-import socket
-import requests
+import contextlib
+import io
+import json
+import logging
 import os
+import socket
+import time
 from contextlib import asynccontextmanager
+from typing import List, Optional
 
-from fastapi import FastAPI, Form, UploadFile, File, Request
+import requests
+from fastapi import FastAPI, File, Form, Request, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
-from fastapi.middleware.cors import CORSMiddleware
 
+from fast_import_pipeline_qdrant import FastImportPipeline
+from src.adapters.neo4j_adapter import Neo4jAdapter
+from src.adapters.ollama_adapter import OllamaAdapter
+from src.adapters.qdrant_adapter import QdrantAdapter
 from src.bootstrap import register_all_defaults
 from src.di_container import resolve
-from src.interfaces import IVectorStore, IGraphStore, ILLMService
-from fast_import_pipeline_qdrant import FastImportPipeline
+from src.interfaces import IGraphStore, ILLMService, IVectorStore
 
 # Pipeline-Instanz als Singleton
 pipeline = FastImportPipeline()
@@ -171,8 +171,9 @@ async def import_document(file: UploadFile = File(...)):
             IMPORT_PROGRESS["steps"].append("DOCX wird gelesen...")
             log_import("fortschritt", file.filename, "DOCX wird gelesen...")
             try:
-                from docx import Document
                 import io as _io
+
+                from docx import Document
                 doc = Document(_io.BytesIO(content))
                 paragraphs = [p.text for p in doc.paragraphs if p.text]
                 text = "\n".join(paragraphs)
@@ -314,8 +315,8 @@ async def import_status():
 @app.post("/import/pdf")
 async def import_pdf(file: UploadFile = File(...)):
     """Importiert eine PDF-Datei und verarbeitet sie mit der Pipeline"""
-    import tempfile
     import os
+    import tempfile
     if not file:
         return JSONResponse({"ok": False, "error": "No file uploaded."}, status_code=400)
     content = await file.read()

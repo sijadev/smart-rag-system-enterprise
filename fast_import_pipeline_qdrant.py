@@ -6,10 +6,11 @@ Addresses connection generation issues during PDF import
 import logging
 import os
 from dataclasses import dataclass
-from src.interfaces import IVectorStore
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
+
+from src.interfaces import IVectorStore
 
 # Import central config instead of direct OS access
 try:

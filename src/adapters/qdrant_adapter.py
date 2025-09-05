@@ -4,9 +4,9 @@
 Provides a minimal async-compatible wrapper around qdrant-client so the
 orchestrator can use the same interface as ChromaAdapter.
 """
-import os
 import asyncio
 import logging
+import os
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -70,6 +70,7 @@ class QdrantAdapter:
             raise RuntimeError("Qdrant client not available")
 
         import uuid
+
         # Qdrant requires point IDs to be either unsigned integers or UUIDs — use UUIDs for compatibility
         ids = [str(uuid.uuid4()) for _ in documents]
         metas = metadatas or [{} for _ in documents]
@@ -97,6 +98,7 @@ class QdrantAdapter:
 
             # Use upsert API
             from qdrant_client.http import models as qmodels
+
             # Ensure payload includes content for each point
             points = [qmodels.PointStruct(id=ids[i], vector=vecs[i], payload=(dict(metas[i]) if i < len(metas) else {})) for i in range(len(ids))]
             for idx, p in enumerate(points):
@@ -125,7 +127,6 @@ class QdrantAdapter:
             return []
 
         def _sync_query():
-            from qdrant_client.http import models as qmodels
             hits = self._client.search(collection_name=self._collection_name, query_vector=query_embedding, limit=k)
             results = []
             for h in hits:
@@ -144,7 +145,6 @@ class QdrantAdapter:
             return
 
         def _sync_delete():
-            from qdrant_client.http import models as qmodels
             self._client.delete(collection_name=self._collection_name, points=doc_ids)
 
         await asyncio.to_thread(_sync_delete)

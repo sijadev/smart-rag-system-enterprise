@@ -6,16 +6,15 @@ an in-memory Python implementation with linear search. Embeddings are
 obtained by calling an embedder: either a callable provided in config as
 "embedder" or by resolving ILLMService from DI and calling embed().
 """
-from typing import Any, Dict, List, Optional
 import asyncio
-import logging
 import json
+import logging
 import os
 import traceback
+from typing import Any, Dict, List, Optional
 
-from src.interfaces import IVectorStore
 from src.di_container import resolve
-from src.interfaces import ILLMService
+from src.interfaces import ILLMService, IVectorStore
 
 logger = logging.getLogger(__name__)
 
@@ -36,8 +35,8 @@ class FaissAdapter(IVectorStore):
 
         # Try to import faiss & numpy
         try:
-            import numpy as _np  # type: ignore
             import faiss  # type: ignore
+            import numpy as _np  # type: ignore
 
             self._np = _np
             self._faiss = faiss
@@ -187,8 +186,8 @@ class FaissAdapter(IVectorStore):
 
     def _rebuild_index(self):
         try:
-            import numpy as np
             import faiss
+            import numpy as np
 
             if len(self._vectors) == 0:
                 # empty index
